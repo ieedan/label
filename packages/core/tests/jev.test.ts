@@ -5,6 +5,7 @@ import {
 	chunkItems,
 	collectDecisions,
 	labelsToApply,
+	labelsToRemove,
 	questionId,
 	REQUEST_CHAR_BUDGET,
 } from '../src/jev.js';
@@ -129,6 +130,55 @@ describe('collectDecisions', () => {
 
 		expect(decisions[0]?.chosen).toEqual(['bug', 'enhancement']);
 		expect(labelsToApply(decisions[0]!)).toEqual(['enhancement']);
+		expect(labelsToRemove(decisions[0]!)).toEqual([]);
+	});
+});
+
+describe('labelsToRemove', () => {
+	it('removes stale labels that score well below the threshold', () => {
+		const decisions = collectDecisions(
+			[{ ...item(1), currentLabels: ['bug', 'enhancement'] }],
+			labels,
+			{
+				[questionId(0, 0)]: { noul: 0.95 },
+				[questionId(0, 1)]: { noul: 0.1 },
+			},
+			0.6
+		);
+
+		expect(labelsToApply(decisions[0]!)).toEqual([]);
+		expect(labelsToRemove(decisions[0]!)).toEqual(['enhancement']);
+	});
+
+	it('leaves near-threshold labels in place', () => {
+		const decisions = collectDecisions(
+			[{ ...item(1), currentLabels: ['enhancement'] }],
+			labels,
+			{
+				[questionId(0, 0)]: { noul: 0.1 },
+				[questionId(0, 1)]: { noul: 0.45 },
+			},
+			0.6
+		);
+
+		expect(labelsToRemove(decisions[0]!)).toEqual([]);
+	});
+
+	it('does not remove suggest-only or sticky labels', () => {
+		const decisions = collectDecisions(
+			[{ ...item(1), currentLabels: ['good first issue', 'bug'] }],
+			[
+				{ name: 'good first issue', description: null, auto: false },
+				{ name: 'bug', description: null, remove: false },
+			],
+			{
+				[questionId(0, 0)]: { noul: 0.05 },
+				[questionId(0, 1)]: { noul: 0.05 },
+			},
+			0.6
+		);
+
+		expect(labelsToRemove(decisions[0]!)).toEqual([]);
 	});
 });
 

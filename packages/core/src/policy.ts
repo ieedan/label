@@ -16,6 +16,7 @@ export type LabelPolicyEntry = {
 	examples?: string[];
 	threshold?: number;
 	auto?: boolean;
+	remove?: boolean;
 };
 
 export type LabelPolicy = {
@@ -33,6 +34,7 @@ export type LabelDefinition = {
 	examples?: string[];
 	threshold?: number;
 	auto?: boolean;
+	remove?: boolean;
 };
 
 const labelPolicyEntrySchema = z.object({
@@ -42,6 +44,7 @@ const labelPolicyEntrySchema = z.object({
 	examples: z.array(z.string()).optional(),
 	threshold: z.coerce.number().min(0).max(1).optional(),
 	auto: z.boolean().optional(),
+	remove: z.boolean().optional(),
 });
 
 const labelPolicySchema = z.object({
@@ -80,6 +83,7 @@ export function parseLabelPolicy(content: string): Result<LabelPolicy, InvalidLa
 			examples: entry.examples?.filter((example) => example.trim().length > 0),
 			threshold: entry.threshold,
 			auto: entry.auto,
+			remove: entry.remove,
 		};
 	}
 
@@ -142,6 +146,7 @@ export function mergeLabelPolicy(
 				examples: matching.examples,
 				threshold: matching.threshold,
 				auto: matching.auto,
+				remove: matching.remove,
 			},
 		];
 	});

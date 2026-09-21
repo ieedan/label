@@ -300,6 +300,141 @@ describe('labelIssues', () => {
 		expect(posts).toEqual([JSON.stringify({ labels: ['enhancement'] })]);
 	});
 
+	it('DELETEs stale labels that no longer apply', async () => {
+		const methods: string[] = [];
+
+		const result = await labelIssues({
+			repo: 'ieedan/label',
+			numbers: ['1'],
+			token: 'test-token',
+			fetch: async (input, init) => {
+				const url = String(input);
+				const method = init?.method ?? 'GET';
+				methods.push(`${method} ${url}`);
+				const conversation = emptyConversation(url);
+				if (conversation) return conversation;
+				if (url.includes('/labels') && method === 'GET') {
+					return Response.json(labels);
+				}
+				if (url.endsWith('/issues/1')) {
+					return Response.json({
+						number: 1,
+						title: 'Crash',
+						body: 'It crashes',
+						labels: [{ name: 'enhancement' }],
+					});
+				}
+				if (url.includes('/labels') && method === 'POST') {
+					return Response.json([]);
+				}
+				if (url.includes('/labels/enhancement') && method === 'DELETE') {
+					return new Response(null, { status: 204 });
+				}
+				throw new Error(`unexpected ${method} ${url}`);
+			},
+			ask: async () => ({
+				answers: {
+					[questionId(0, 0)]: { noul: 0.95 },
+					[questionId(0, 1)]: { noul: 0.1 },
+				},
+			}),
+		});
+
+		expect(result.isOk()).toBe(true);
+		expect(methods.some((request) => request.startsWith('POST'))).toBe(true);
+		expect(
+			methods.some((request) => request.includes('DELETE') && request.includes('enhancement'))
+		).toBe(true);
+	});
+
+	it('does not DELETE labels when remove is false', async () => {
+		const methods: string[] = [];
+
+		const result = await labelIssues({
+			repo: 'ieedan/label',
+			numbers: ['1'],
+			remove: false,
+			token: 'test-token',
+			fetch: async (input, init) => {
+				const url = String(input);
+				const method = init?.method ?? 'GET';
+				methods.push(`${method} ${url}`);
+				const conversation = emptyConversation(url);
+				if (conversation) return conversation;
+				if (url.includes('/labels') && method === 'GET') {
+					return Response.json(labels);
+				}
+				if (url.endsWith('/issues/1')) {
+					return Response.json({
+						number: 1,
+						title: 'Crash',
+						body: 'It crashes',
+						labels: [{ name: 'enhancement' }],
+					});
+				}
+				if (url.includes('/labels') && method === 'POST') {
+					return Response.json([]);
+				}
+				throw new Error(`unexpected ${method} ${url}`);
+			},
+			ask: async () => ({
+				answers: {
+					[questionId(0, 0)]: { noul: 0.95 },
+					[questionId(0, 1)]: { noul: 0.1 },
+				},
+			}),
+		});
+
+		expect(result.isOk()).toBe(true);
+		expect(methods.some((request) => request.startsWith('DELETE'))).toBe(false);
+	});
+
+	it('does not DELETE labels excluded by onlyConfigured', async () => {
+		const methods: string[] = [];
+
+		const result = await labelIssues({
+			repo: 'ieedan/label',
+			numbers: ['1'],
+			token: 'test-token',
+			policy: {
+				onlyConfigured: true,
+				labels: {
+					bug: { applyWhen: 'Reproducible crash.' },
+				},
+			},
+			fetch: async (input, init) => {
+				const url = String(input);
+				const method = init?.method ?? 'GET';
+				methods.push(`${method} ${url}`);
+				const conversation = emptyConversation(url);
+				if (conversation) return conversation;
+				if (url.includes('/labels') && method === 'GET') {
+					return Response.json(labels);
+				}
+				if (url.endsWith('/issues/1')) {
+					return Response.json({
+						number: 1,
+						title: 'Crash',
+						body: 'It crashes',
+						labels: [{ name: 'bug' }, { name: 'enhancement' }],
+					});
+				}
+				if (url.includes('/labels') && method === 'POST') {
+					return Response.json([]);
+				}
+				throw new Error(`unexpected ${method} ${url}`);
+			},
+			ask: async () => ({
+				answers: {
+					[questionId(0, 0)]: { noul: 0.95 },
+				},
+			}),
+		});
+
+		expect(result.isOk()).toBe(true);
+		expect(methods.some((request) => request.startsWith('DELETE'))).toBe(false);
+	});
+
 	it('lists open issues for --top and does not fetch by number', async () => {
 		const requests: string[] = [];
 

@@ -9,7 +9,7 @@ describe('cli', () => {
 		expect(cli.commands.map((command) => command.name())).toContain('label');
 	});
 
-	it('registers all, top, include-closed, issues, prs, with-confidence, and prompt options', () => {
+	it('registers all, top, include-closed, issues, prs, with-confidence, prompt, and no-remove options', () => {
 		const command = cli.commands.find((entry) => entry.name() === 'label');
 		const flags = command?.options.map((option) => option.long) ?? [];
 		expect(flags).toEqual(
@@ -21,6 +21,7 @@ describe('cli', () => {
 				'--prs',
 				'--with-confidence',
 				'--prompt',
+				'--no-remove',
 			])
 		);
 	});
@@ -46,6 +47,7 @@ describe('formatDecisions', () => {
 					threshold: 0.6,
 					apply: true,
 					auto: true,
+					remove: true,
 				},
 				{
 					name: 'enhancement',
@@ -55,6 +57,7 @@ describe('formatDecisions', () => {
 					threshold: 0.6,
 					apply: false,
 					auto: true,
+					remove: true,
 				},
 			],
 			chosen: ['bug'],
@@ -77,6 +80,7 @@ describe('formatDecisions', () => {
 					threshold: 0.6,
 					apply: false,
 					auto: true,
+					remove: true,
 				},
 				{
 					name: 'enhancement',
@@ -86,6 +90,7 @@ describe('formatDecisions', () => {
 					threshold: 0.6,
 					apply: true,
 					auto: true,
+					remove: true,
 				},
 			],
 			chosen: ['enhancement'],
@@ -130,6 +135,7 @@ describe('formatDecisions', () => {
 							threshold: 0.6,
 							apply: true,
 							auto: true,
+							remove: true,
 						},
 						{
 							name: 'docs',
@@ -138,6 +144,7 @@ describe('formatDecisions', () => {
 							threshold: 0.6,
 							apply: true,
 							auto: true,
+							remove: true,
 						},
 						{
 							name: 'enhancement',
@@ -146,6 +153,7 @@ describe('formatDecisions', () => {
 							threshold: 0.6,
 							apply: false,
 							auto: true,
+							remove: true,
 						},
 					],
 				},
@@ -175,6 +183,7 @@ describe('formatDecisions', () => {
 							threshold: 0.6,
 							apply: true,
 							auto: true,
+							remove: true,
 						},
 						{
 							name: 'good first issue',
@@ -183,6 +192,7 @@ describe('formatDecisions', () => {
 							threshold: 0.6,
 							apply: true,
 							auto: false,
+							remove: true,
 						},
 					],
 					chosen: ['bug', 'good first issue'],
@@ -192,6 +202,42 @@ describe('formatDecisions', () => {
 		);
 		expect(table).toContain('bug');
 		expect(table).toContain('good first issue (suggest)');
+	});
+
+	it('marks labels that will be removed', () => {
+		const table = formatDecisions(
+			[
+				{
+					...decisions[0]!,
+					item: { ...decisions[0]!.item, currentLabels: ['enhancement'] },
+					labels: [
+						{
+							name: 'bug',
+							description: null,
+							noul: 0.91,
+							threshold: 0.6,
+							apply: true,
+							auto: true,
+							remove: true,
+						},
+						{
+							name: 'enhancement',
+							description: null,
+							noul: 0.1,
+							threshold: 0.6,
+							apply: false,
+							auto: true,
+							remove: true,
+						},
+					],
+					chosen: ['bug'],
+				},
+			],
+			{ columns: 120 }
+		);
+		expect(table).toContain('bug');
+		expect(table).toContain('enhancement (remove)');
+		expect(table).toContain('0.10');
 	});
 
 	it('keeps table rows within the terminal width', () => {

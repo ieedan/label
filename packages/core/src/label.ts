@@ -16,6 +16,7 @@ import {
 	parseGitHubPayload,
 	parseRepo,
 	type RepoLabel,
+	removeIssueLabels,
 	resolveIssueSelection,
 	resolveItemKind,
 } from './github';
@@ -25,6 +26,7 @@ import {
 	DEFAULT_LABEL_THRESHOLD,
 	type LabelDecision,
 	labelsToApply,
+	labelsToRemove,
 } from './jev';
 import { type LabelPolicy, mergeLabelPolicy, readLabelPolicy } from './policy';
 
@@ -51,6 +53,7 @@ export type LabelIssuesOptions = {
 	issues?: boolean;
 	prs?: boolean;
 	dryRun?: boolean;
+	remove?: boolean;
 	token?: string;
 	threshold?: number;
 	policy?: LabelPolicy;
@@ -144,6 +147,7 @@ export async function labelIssues(
 	if (labeled.isErr()) return err(labeled.error);
 
 	const dryRun = options.dryRun ?? false;
+	const remove = options.remove ?? true;
 	if (!dryRun) {
 		const applied = await Promise.all(
 			labeled.value.decisions.map((decision) =>
@@ -152,6 +156,17 @@ export async function labelIssues(
 		);
 		for (const result of applied) {
 			if (result.isErr()) return err(result.error);
+		}
+
+		if (remove) {
+			const removed = await Promise.all(
+				labeled.value.decisions.map((decision) =>
+					removeIssueLabels(repo, decision.item.number, labelsToRemove(decision), github)
+				)
+			);
+			for (const result of removed) {
+				if (result.isErr()) return err(result.error);
+			}
 		}
 	}
 

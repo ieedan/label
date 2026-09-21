@@ -22,6 +22,7 @@ labels:
     examples:
       - Crash when input is empty
     threshold: 0.7
+    remove: false
   good first issue:
     auto: false
     threshold: 0.85
@@ -36,6 +37,7 @@ labels:
 				notWhen: 'Missing features.',
 				examples: ['Crash when input is empty'],
 				threshold: 0.7,
+				remove: false,
 			});
 			expect(result.value.labels['good first issue']).toMatchObject({
 				auto: false,
@@ -85,6 +87,7 @@ describe('mergeLabelPolicy', () => {
 					examples: undefined,
 					threshold: 0.8,
 					auto: undefined,
+					remove: undefined,
 				},
 				{ name: 'enhancement', description: 'New capability.', color: 'a2eeef' },
 			]);
@@ -118,6 +121,7 @@ describe('mergeLabelPolicy', () => {
 					examples: undefined,
 					threshold: undefined,
 					auto: undefined,
+					remove: undefined,
 				},
 			]);
 		}

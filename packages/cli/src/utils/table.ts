@@ -1,4 +1,4 @@
-import type { LabelDecision, LabelJudgment } from '@ieedan/label-core';
+import { type LabelDecision, type LabelJudgment, labelsToRemove } from '@ieedan/label-core';
 import pc from 'picocolors';
 
 const TITLE_MAX = 40;
@@ -88,15 +88,23 @@ function wrapTokens(tokens: string[], width: number): string[] {
 }
 
 function formatLabels(decision: LabelDecision): string {
-	const chosen = decision.labels.filter((label) => label.apply);
-	if (chosen.length === 0) return '—';
-	return chosen
-		.map((label) => `${colorLabel(formatLabelName(label), label)} (${colorScore(label)})`)
+	const removed = new Set(labelsToRemove(decision).map((name) => name.toLowerCase()));
+	const shown = decision.labels.filter(
+		(label) => label.apply || removed.has(label.name.toLowerCase())
+	);
+	if (shown.length === 0) return '—';
+	return shown
+		.map(
+			(label) =>
+				`${colorLabel(formatLabelName(label, removed.has(label.name.toLowerCase())), label)} (${colorScore(label)})`
+		)
 		.join(', ');
 }
 
-function formatLabelName(label: LabelJudgment): string {
-	return label.auto === false ? `${label.name} (suggest)` : label.name;
+function formatLabelName(label: LabelJudgment, removed: boolean): string {
+	if (label.auto === false) return `${label.name} (suggest)`;
+	if (removed) return `${label.name} (remove)`;
+	return label.name;
 }
 
 function colorLabel(name: string, label: LabelJudgment): string {

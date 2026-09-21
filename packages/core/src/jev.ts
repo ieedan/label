@@ -17,6 +17,7 @@ export type LabelJudgment = {
 	threshold: number;
 	apply: boolean;
 	auto: boolean;
+	remove: boolean;
 };
 
 export type LabelDecision = {
@@ -141,6 +142,7 @@ export function collectDecisions(
 				threshold: labelThreshold,
 				apply: noulValue >= labelThreshold,
 				auto: label.auto !== false,
+				remove: label.remove !== false,
 			};
 		});
 
@@ -156,6 +158,21 @@ export function labelsToApply(decision: LabelDecision): string[] {
 	const existing = new Set(decision.item.currentLabels.map((name) => name.toLowerCase()));
 	return decision.labels
 		.filter((label) => label.apply && label.auto && !existing.has(label.name.toLowerCase()))
+		.map((label) => label.name);
+}
+
+/** Remove only when noul is below `1 - threshold` so near-threshold scores do not flap. */
+export function labelsToRemove(decision: LabelDecision): string[] {
+	const existing = new Set(decision.item.currentLabels.map((name) => name.toLowerCase()));
+	return decision.labels
+		.filter(
+			(label) =>
+				existing.has(label.name.toLowerCase()) &&
+				label.auto &&
+				label.remove &&
+				!label.apply &&
+				label.noul < 1 - label.threshold
+		)
 		.map((label) => label.name);
 }
 

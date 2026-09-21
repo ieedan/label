@@ -16,6 +16,7 @@ import { formatDecisions } from '@/utils/table';
 export const schema = defaultCommandOptionsSchema.extend({
 	verbose: z.boolean(),
 	dryRun: z.boolean(),
+	remove: z.boolean(),
 	repo: z.string(),
 	threshold: z.coerce.number(),
 	all: z.boolean(),
@@ -33,7 +34,8 @@ export const label = new Command('label')
 	.description('Label GitHub issues and pull requests with Jev.')
 	.argument('[numbers...]', 'Issue or pull request numbers.')
 	.requiredOption('-R, --repo <owner/name>', 'GitHub repository.')
-	.option('--dry-run', 'Do not apply labels; print decisions only.', false)
+	.option('--dry-run', 'Do not apply or remove labels; print decisions only.', false)
+	.option('--no-remove', 'Do not remove labels that no longer apply.')
 	.option('--all', 'Label every matching issue and pull request.', false)
 	.option(
 		'--top [n]',
@@ -60,16 +62,14 @@ export const label = new Command('label')
 
 		spinner.start('Asking Jev which labels to apply...');
 		const result = await tryCommand(runLabel(numbers, options));
-		spinner.stop(
-			result.dryRun ? 'Dry run. No labels were applied.' : 'Applied the chosen labels.'
-		);
+		spinner.stop(result.dryRun ? 'Dry run. No labels were changed.' : 'Updated labels.');
 
 		process.stdout.write(`\n${formatDecisions(result.decisions)}\n\n`);
 
 		outro(
 			result.dryRun
 				? `Chose labels for ${result.decisions.length} item(s).`
-				: `Labeled ${result.decisions.length} item(s).`
+				: `Updated ${result.decisions.length} item(s).`
 		);
 	});
 
@@ -86,6 +86,7 @@ export async function runLabel(
 		issues: options.issues,
 		prs: options.prs,
 		dryRun: options.dryRun,
+		remove: options.remove,
 		threshold: options.threshold,
 		prompt: options.prompt,
 		cwd: options.cwd,

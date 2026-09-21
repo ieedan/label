@@ -492,6 +492,35 @@ export async function addIssueLabels(
 	return ok(undefined);
 }
 
+export async function removeIssueLabels(
+	repo: GitHubRepo,
+	number: number,
+	labels: string[],
+	options: GitHubClientOptions = {}
+): Promise<Result<void, GitHubApiError | MissingGitHubTokenError>> {
+	if (labels.length === 0) return ok(undefined);
+
+	const tokenResult = requireToken(options.token);
+	if (tokenResult.isErr()) return err(tokenResult.error);
+
+	const results = await Promise.all(
+		labels.map((label) =>
+			githubJson(
+				`/repos/${repo.owner}/${repo.name}/issues/${number}/labels/${encodeURIComponent(label)}`,
+				{
+					token: tokenResult.value,
+					fetch: options.fetch,
+					method: 'DELETE',
+				}
+			)
+		)
+	);
+	for (const result of results) {
+		if (result.isErr()) return err(result.error);
+	}
+	return ok(undefined);
+}
+
 function requireToken(token: string | undefined): Result<string, MissingGitHubTokenError> {
 	const resolved = token ?? githubToken();
 	if (!resolved) return err(new MissingGitHubTokenError());

@@ -37,6 +37,7 @@ export {
 	parseIssueNumbers,
 	parseRepo,
 	parseTopCount,
+	removeIssueLabels,
 	resolveIssueSelection,
 	resolveItemKind,
 } from './github';
@@ -48,6 +49,7 @@ export {
 	collectDecisions,
 	DEFAULT_LABEL_THRESHOLD,
 	labelsToApply,
+	labelsToRemove,
 	questionId,
 } from './jev';
 export type { LabelIssuesOptions, LabelIssuesResult, LabelOptions, LabelResult } from './label';
