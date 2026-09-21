@@ -1,6 +1,7 @@
 import type { TypeSafeClient } from '@typesafe-ai/sdk';
 import { err, ok, type Result } from 'nevereverthrow';
 import { type LabelError, NoIssuesFoundError, WrongItemKindError } from './errors';
+import { detectRepo } from './git';
 import {
 	addIssueLabels,
 	type GitHubClientOptions,
@@ -55,7 +56,8 @@ export type LabelResult = {
 };
 
 export type LabelIssuesOptions = {
-	repo: string;
+	/** The repository to label. Detected from the git remotes at `cwd` when omitted. */
+	repo?: string;
 	numbers?: string[] | number[];
 	all?: boolean;
 	top?: boolean | number | string;
@@ -128,7 +130,7 @@ export async function label(options: LabelOptions): Promise<Result<LabelResult, 
 export async function labelIssues(
 	options: LabelIssuesOptions
 ): Promise<Result<LabelIssuesResult, LabelError>> {
-	const repoResult = parseRepo(options.repo);
+	const repoResult = await resolveRepo(options.repo, options.cwd);
 	if (repoResult.isErr()) return err(repoResult.error);
 	const repo = repoResult.value;
 	const repoName = `${repo.owner}/${repo.name}`;
@@ -210,6 +212,17 @@ export async function labelIssues(
 		dryRun,
 		decisions: labeled.value.decisions,
 	});
+}
+
+/**
+ * Resolves the repository from the given reference, falling back to the git remotes at `cwd`.
+ */
+async function resolveRepo(
+	repo: string | undefined,
+	cwd: string | undefined
+): Promise<Result<GitHubRepo, LabelError>> {
+	if (repo !== undefined && repo.trim().length > 0) return parseRepo(repo);
+	return detectRepo(cwd);
 }
 
 async function loadIssuePayloads(

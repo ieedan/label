@@ -26,6 +26,13 @@ describe('cli', () => {
 			])
 		);
 	});
+
+	it('does not require --repo', () => {
+		const command = cli.commands.find((entry) => entry.name() === 'label');
+		const repo = command?.options.find((option) => option.long === '--repo');
+		expect(repo?.required).toBe(true);
+		expect(repo?.mandatory).toBe(false);
+	});
 });
 
 describe('formatDecisions', () => {

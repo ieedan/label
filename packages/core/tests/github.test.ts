@@ -28,8 +28,35 @@ describe('parseRepo', () => {
 		}
 	});
 
+	it('parses SSH remote URLs', () => {
+		const result = parseRepo('git@github.com:ieedan/label.git');
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value).toEqual({ owner: 'ieedan', name: 'label' });
+		}
+	});
+
+	it('parses ssh:// and git:// remote URLs', () => {
+		for (const url of [
+			'ssh://git@github.com/ieedan/label.git',
+			'git://github.com/ieedan/label.git',
+			'https://ieedan@github.com/ieedan/label',
+		]) {
+			const result = parseRepo(url);
+			expect(result.isOk(), url).toBe(true);
+			if (result.isOk()) {
+				expect(result.value).toEqual({ owner: 'ieedan', name: 'label' });
+			}
+		}
+	});
+
 	it('rejects invalid repos', () => {
 		expect(parseRepo('label').isErr()).toBe(true);
+	});
+
+	it('rejects repositories that are not hosted on GitHub', () => {
+		expect(parseRepo('https://gitlab.com/ieedan/label.git').isErr()).toBe(true);
+		expect(parseRepo('git@gitlab.com:ieedan/label.git').isErr()).toBe(true);
 	});
 });
 
