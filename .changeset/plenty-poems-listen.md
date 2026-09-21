@@ -1,5 +1,4 @@
 ---
-'@ieedan/label-core': patch
 '@ieedan/label': patch
 ---
 
