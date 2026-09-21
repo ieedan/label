@@ -1,0 +1,18 @@
+node_modules
+
+# out
+dist
+
+# testing
+temp-test
+**/tests/fixtures/**/node_modules
+**/tests/fixtures/**/package-lock.json
+**/tests/fixtures/**/pnpm-lock.yaml
+
+.DS_Store
+
+.env
+.env.*
+!.env.example
+
+.super-review/sessions/
