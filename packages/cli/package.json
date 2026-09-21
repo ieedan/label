@@ -1,5 +1,5 @@
 {
-	"name": "label",
+	"name": "@ieedan/label",
 	"description": "An issue labeler built on top of Jev.",
 	"version": "0.0.0",
 	"license": "MIT",
@@ -36,7 +36,7 @@
 	},
 	"packageManager": "pnpm@10.30.1",
 	"dependencies": {
-		"@label/core": "workspace:*",
+		"@ieedan/label-core": "workspace:*",
 		"commander": "catalog:"
 	},
 	"devDependencies": {

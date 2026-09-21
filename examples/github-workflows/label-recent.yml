@@ -1,0 +1,34 @@
+# Copy to .github/workflows/label-recent.yml
+#
+# Labels the most recently updated open issues and pull requests on a schedule.
+# Use --all instead of --top to cover everything (can be slower and cost more).
+# Limit to issues with --issues, or pull requests with --prs.
+
+name: Label recent
+
+on:
+    schedule:
+        - cron: '0 6 * * *'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    issues: write
+    pull-requests: write
+
+jobs:
+    label:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+
+            - name: Label
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+              run: npx --yes @ieedan/label label -R "$GITHUB_REPOSITORY" --top 25

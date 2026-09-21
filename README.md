@@ -34,6 +34,7 @@ GitHub label descriptions are short. Put longer rules in `.label.yml` at the rep
 
 ```yaml
 policy: Prefer specific area labels. Never apply both bug and enhancement.
+only_configured: true
 
 labels:
   bug:
@@ -49,7 +50,20 @@ labels:
     auto: false
 ```
 
-Unlisted labels still use the GitHub name and description. `auto: false` shows the label as a suggestion and does not apply it. `--prompt` is extra steering on top of this file.
+Unlisted labels still use the GitHub name and description unless `only_configured: true`, which limits Jev to labels listed in this file. `auto: false` shows the label as a suggestion and does not apply it. `--prompt` is extra steering on top of this file.
+
+## GitHub Actions
+
+This repo labels its own issues and pull requests with [`.github/workflows/label.yml`](.github/workflows/label.yml). That workflow builds the CLI from this monorepo.
+
+To use the published CLI in another repository, copy the examples in [`examples/github-workflows`](examples/github-workflows):
+
+- [`label.yml`](examples/github-workflows/label.yml) runs on every issue and pull request (and on new comments) and applies labels to that item.
+- [`label-recent.yml`](examples/github-workflows/label-recent.yml) labels the 25 most recently updated open items on a schedule, or when you run it from the Actions tab.
+
+Add a `TYPESAFE_API_KEY` repository secret. The workflow uses `GITHUB_TOKEN` with `issues: write` and `pull-requests: write`. Labels already on the item are left alone; only new matches are applied.
+
+`pull_request_target` is used so fork PRs can be labeled. Those workflows check out the default branch, not the pull request, so untrusted PR code is not executed.
 
 Development watch mode:
 

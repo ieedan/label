@@ -1,4 +1,4 @@
-import type { LabelDecision, LabelJudgment } from '@label/core';
+import type { LabelDecision, LabelJudgment } from '@ieedan/label-core';
 import pc from 'picocolors';
 
 const TITLE_MAX = 40;

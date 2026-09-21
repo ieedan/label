@@ -1,4 +1,4 @@
-import { LabelError } from '@label/core';
+import { LabelError } from '@ieedan/label-core';
 import type { z } from 'zod';
 
 export type CLIError = LabelError | InvalidOptionsError | InvalidJSONError | ZodError;

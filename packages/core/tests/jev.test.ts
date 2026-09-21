@@ -115,6 +115,21 @@ describe('collectDecisions', () => {
 		expect(decisions[0]?.chosen).toEqual(['good first issue']);
 		expect(labelsToApply(decisions[0]!)).toEqual([]);
 	});
+
+	it('does not re-apply labels already on the item', () => {
+		const decisions = collectDecisions(
+			[{ ...item(1), currentLabels: ['bug'] }],
+			labels,
+			{
+				[questionId(0, 0)]: { noul: 0.95 },
+				[questionId(0, 1)]: { noul: 0.8 },
+			},
+			0.6
+		);
+
+		expect(decisions[0]?.chosen).toEqual(['bug', 'enhancement']);
+		expect(labelsToApply(decisions[0]!)).toEqual(['enhancement']);
+	});
 });
 
 describe('chunkItems', () => {

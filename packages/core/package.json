@@ -1,5 +1,5 @@
 {
-	"name": "@label/core",
+	"name": "@ieedan/label-core",
 	"description": "Core labeling logic for label.",
 	"version": "0.0.0",
 	"license": "MIT",

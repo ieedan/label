@@ -1,4 +1,4 @@
-import { type AbsolutePath, LabelError } from '@label/core';
+import { type AbsolutePath, LabelError } from '@ieedan/label-core';
 import { Option } from 'commander';
 import type { Result } from 'nevereverthrow';
 import pc from 'picocolors';

@@ -1,4 +1,4 @@
-import type { LabelDecision } from '@label/core';
+import type { LabelDecision } from '@ieedan/label-core';
 import pc from 'picocolors';
 import { describe, expect, it } from 'vitest';
 import { cli } from '@/cli';

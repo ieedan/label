@@ -14,6 +14,7 @@ describe('parseLabelPolicy', () => {
 	it('parses overlay fields', () => {
 		const result = parseLabelPolicy(`
 policy: Prefer specific area labels.
+only_configured: true
 labels:
   bug:
     apply_when: Reproducible incorrect behavior.
@@ -29,6 +30,7 @@ labels:
 		expect(result.isOk()).toBe(true);
 		if (result.isOk()) {
 			expect(result.value.policy).toBe('Prefer specific area labels.');
+			expect(result.value.onlyConfigured).toBe(true);
 			expect(result.value.labels.bug).toMatchObject({
 				applyWhen: 'Reproducible incorrect behavior.',
 				notWhen: 'Missing features.',
@@ -94,6 +96,31 @@ describe('mergeLabelPolicy', () => {
 			labels: { typo: { applyWhen: 'Nope' } },
 		});
 		expect(result.isErr()).toBe(true);
+	});
+
+	it('keeps only configured labels when onlyConfigured is set', () => {
+		const result = mergeLabelPolicy(github, {
+			onlyConfigured: true,
+			labels: {
+				bug: { applyWhen: 'Reproducible incorrect behavior.' },
+			},
+		});
+
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value).toEqual([
+				{
+					name: 'bug',
+					description: 'Something is broken.',
+					color: 'd73a4a',
+					applyWhen: 'Reproducible incorrect behavior.',
+					notWhen: undefined,
+					examples: undefined,
+					threshold: undefined,
+					auto: undefined,
+				},
+			]);
+		}
 	});
 });
 

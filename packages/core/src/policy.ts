@@ -20,6 +20,7 @@ export type LabelPolicyEntry = {
 
 export type LabelPolicy = {
 	policy?: string;
+	onlyConfigured?: boolean;
 	labels: Record<string, LabelPolicyEntry>;
 };
 
@@ -45,6 +46,7 @@ const labelPolicyEntrySchema = z.object({
 
 const labelPolicySchema = z.object({
 	policy: z.string().optional(),
+	only_configured: z.boolean().optional(),
 	labels: z.record(z.string(), labelPolicyEntrySchema).optional(),
 });
 
@@ -83,6 +85,7 @@ export function parseLabelPolicy(content: string): Result<LabelPolicy, InvalidLa
 
 	return ok({
 		policy: emptyToUndefined(parsed.data.policy),
+		onlyConfigured: parsed.data.only_configured,
 		labels,
 	});
 }
@@ -124,11 +127,13 @@ export function mergeLabelPolicy(
 		}
 	}
 
-	return ok(
-		githubLabels.map((label) => {
-			const matching = findEntry(policy.labels, label.name);
-			if (!matching) return label;
-			return {
+	const merged = githubLabels.flatMap((label) => {
+		const matching = findEntry(policy.labels, label.name);
+		if (!matching) {
+			return policy.onlyConfigured ? [] : [label];
+		}
+		return [
+			{
 				name: label.name,
 				description: matching.description ?? label.description,
 				color: label.color,
@@ -137,9 +142,11 @@ export function mergeLabelPolicy(
 				examples: matching.examples,
 				threshold: matching.threshold,
 				auto: matching.auto,
-			};
-		})
-	);
+			},
+		];
+	});
+
+	return ok(merged);
 }
 
 function findEntry(

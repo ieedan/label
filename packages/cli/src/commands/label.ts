@@ -1,4 +1,4 @@
-import * as core from '@label/core';
+import * as core from '@ieedan/label-core';
 import { Command } from 'commander';
 import type { Result } from 'nevereverthrow';
 import { z } from 'zod';

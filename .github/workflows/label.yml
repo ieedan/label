@@ -1,0 +1,41 @@
+name: Label
+
+on:
+    issues:
+        types: [opened, edited, reopened]
+    pull_request_target:
+        types: [opened, edited, reopened, ready_for_review]
+    issue_comment:
+        types: [created, edited]
+
+concurrency:
+    group: label-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+    issues: write
+    pull-requests: write
+
+jobs:
+    label:
+        # Still runs on issue comments; skip only Actions-bot comments to avoid loops.
+        if: github.event.comment.user.login != 'github-actions[bot]'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Label
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+              run: pnpm start label -R "$GITHUB_REPOSITORY" "${{ github.event.issue.number || github.event.pull_request.number }}"

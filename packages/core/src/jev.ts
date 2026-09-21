@@ -153,7 +153,10 @@ export function collectDecisions(
 }
 
 export function labelsToApply(decision: LabelDecision): string[] {
-	return decision.labels.filter((label) => label.apply && label.auto).map((label) => label.name);
+	const existing = new Set(decision.item.currentLabels.map((name) => name.toLowerCase()));
+	return decision.labels
+		.filter((label) => label.apply && label.auto && !existing.has(label.name.toLowerCase()))
+		.map((label) => label.name);
 }
 
 export async function askLabels(

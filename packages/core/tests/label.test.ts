@@ -171,6 +171,49 @@ describe('labelIssues', () => {
 		expect(result.isOk()).toBe(true);
 	});
 
+	it('asks Jev only about configured labels when onlyConfigured is set', async () => {
+		const result = await labelIssues({
+			repo: 'ieedan/label',
+			numbers: ['1'],
+			dryRun: true,
+			token: 'test-token',
+			policy: {
+				onlyConfigured: true,
+				labels: {
+					bug: { applyWhen: 'Reproducible crash.' },
+				},
+			},
+			fetch: async (input) => {
+				const url = String(input);
+				const conversation = emptyConversation(url);
+				if (conversation) return conversation;
+				if (url.includes('/labels')) {
+					return Response.json(labels);
+				}
+				if (url.endsWith('/issues/1')) {
+					return Response.json({ number: 1, title: 'Crash', body: 'It crashes' });
+				}
+				throw new Error(`unexpected ${url}`);
+			},
+			ask: async ({ state, questions }) => {
+				expect(state).toMatchObject({
+					labels: [{ name: 'bug', apply_when: 'Reproducible crash.' }],
+				});
+				expect(Object.keys(questions)).toHaveLength(1);
+				return {
+					answers: {
+						[questionId(0, 0)]: { noul: 0.9 },
+					},
+				};
+			},
+		});
+
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value.decisions[0]?.chosen).toEqual(['bug']);
+		}
+	});
+
 	it('does not apply suggest-only labels', async () => {
 		const requests: string[] = [];
 
@@ -212,6 +255,49 @@ describe('labelIssues', () => {
 			expect(result.value.decisions[0]?.chosen).toEqual(['bug']);
 		}
 		expect(requests.some((request) => request.startsWith('POST'))).toBe(false);
+	});
+
+	it('does not POST labels that are already on the issue', async () => {
+		const posts: string[] = [];
+
+		const result = await labelIssues({
+			repo: 'ieedan/label',
+			numbers: ['1'],
+			token: 'test-token',
+			fetch: async (input, init) => {
+				const url = String(input);
+				const conversation = emptyConversation(url);
+				if (conversation) return conversation;
+				if (url.includes('/labels') && (init?.method ?? 'GET') === 'GET') {
+					return Response.json(labels);
+				}
+				if (url.endsWith('/issues/1')) {
+					return Response.json({
+						number: 1,
+						title: 'Crash',
+						body: 'It crashes',
+						labels: [{ name: 'bug' }],
+					});
+				}
+				if (url.includes('/labels') && init?.method === 'POST') {
+					posts.push(String(init.body));
+					return Response.json([]);
+				}
+				throw new Error(`unexpected ${url}`);
+			},
+			ask: async () => ({
+				answers: {
+					[questionId(0, 0)]: { noul: 0.95 },
+					[questionId(0, 1)]: { noul: 0.9 },
+				},
+			}),
+		});
+
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value.decisions[0]?.chosen).toEqual(['bug', 'enhancement']);
+		}
+		expect(posts).toEqual([JSON.stringify({ labels: ['enhancement'] })]);
 	});
 
 	it('lists open issues for --top and does not fetch by number', async () => {
