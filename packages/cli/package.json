@@ -1,7 +1,7 @@
 {
 	"name": "@ieedan/label",
 	"description": "An issue labeler built on top of Jev.",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"license": "MIT",
 	"author": {
 		"name": "Aidan Bleser",
