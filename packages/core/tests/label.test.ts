@@ -256,7 +256,7 @@ describe('labelIssues', () => {
 			token: 'test-token',
 			policy: {
 				labels: {
-					bug: { auto: false },
+					bug: { canApply: false },
 				},
 			},
 			fetch: async (input, init) => {

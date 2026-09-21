@@ -22,12 +22,12 @@ labels:
     examples:
       - Crash when input is empty
     threshold: 0.7
-    remove: false
+    can_remove: false
   duplicate:
     context: similar_issues
     apply_when: The same report already exists.
   good first issue:
-    auto: false
+    can_apply: false
     threshold: 0.85
 `);
 
@@ -40,14 +40,14 @@ labels:
 				removeWhen: 'Missing features.',
 				examples: ['Crash when input is empty'],
 				threshold: 0.7,
-				remove: false,
+				canRemove: false,
 			});
 			expect(result.value.labels.duplicate).toMatchObject({
 				context: 'similar_issues',
 				applyWhen: 'The same report already exists.',
 			});
 			expect(result.value.labels['good first issue']).toMatchObject({
-				auto: false,
+				canApply: false,
 				threshold: 0.85,
 			});
 		}
@@ -97,8 +97,8 @@ describe('mergeLabelPolicy', () => {
 					removeWhen: undefined,
 					examples: undefined,
 					threshold: 0.8,
-					auto: undefined,
-					remove: undefined,
+					canApply: undefined,
+					canRemove: undefined,
 				},
 				{ name: 'enhancement', description: 'New capability.', color: 'a2eeef' },
 			]);
@@ -150,8 +150,8 @@ describe('mergeLabelPolicy', () => {
 					removeWhen: undefined,
 					examples: undefined,
 					threshold: undefined,
-					auto: undefined,
-					remove: undefined,
+					canApply: undefined,
+					canRemove: undefined,
 				},
 			]);
 		}

@@ -102,12 +102,12 @@ describe('collectDecisions', () => {
 		expect(decisions[1]?.chosen).toEqual(['enhancement']);
 	});
 
-	it('uses per-label thresholds and skips auto:false when applying', () => {
+	it('uses per-label thresholds and skips can_apply:false when applying', () => {
 		const decisions = collectDecisions(
 			[item(1)],
 			[
 				{ name: 'bug', description: null, threshold: 0.9 },
-				{ name: 'good first issue', description: null, auto: false },
+				{ name: 'good first issue', description: null, canApply: false },
 			],
 			{
 				[questionId(0, 0)]: { noul: 0.8 },
@@ -167,12 +167,12 @@ describe('labelsToRemove', () => {
 		expect(labelsToRemove(decisions[0]!)).toEqual([]);
 	});
 
-	it('does not remove suggest-only or sticky labels', () => {
+	it('does not remove labels with can_remove:false', () => {
 		const decisions = collectDecisions(
 			[{ ...item(1), currentLabels: ['good first issue', 'bug'] }],
 			[
-				{ name: 'good first issue', description: null, auto: false },
-				{ name: 'bug', description: null, remove: false },
+				{ name: 'good first issue', description: null, canApply: false, canRemove: false },
+				{ name: 'bug', description: null, canRemove: false },
 			],
 			{
 				[questionId(0, 0)]: { noul: 0.05 },
@@ -182,6 +182,17 @@ describe('labelsToRemove', () => {
 		);
 
 		expect(labelsToRemove(decisions[0]!)).toEqual([]);
+	});
+
+	it('can still remove a can_apply:false label that is already on the item', () => {
+		const decisions = collectDecisions(
+			[{ ...item(1), currentLabels: ['good first issue'] }],
+			[{ name: 'good first issue', description: null, canApply: false }],
+			{ [questionId(0, 0)]: { noul: 0.05 } },
+			0.6
+		);
+
+		expect(labelsToRemove(decisions[0]!)).toEqual(['good first issue']);
 	});
 });
 

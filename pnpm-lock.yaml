@@ -38,13 +38,13 @@ importers:
 
   packages/cli:
     dependencies:
-      '@ieedan/label-core':
-        specifier: workspace:*
-        version: link:../core
       commander:
         specifier: 'catalog:'
         version: 14.0.3
     devDependencies:
+      '@ieedan/label-core':
+        specifier: workspace:*
+        version: link:../core
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.7

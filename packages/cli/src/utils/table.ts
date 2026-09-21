@@ -102,7 +102,7 @@ function formatLabels(decision: LabelDecision): string {
 }
 
 function formatLabelName(label: LabelJudgment, removed: boolean): string {
-	if (label.auto === false) return `${label.name} (suggest)`;
+	if (label.canApply === false) return `${label.name} (suggest)`;
 	if (removed) return `${label.name} (remove)`;
 	return label.name;
 }

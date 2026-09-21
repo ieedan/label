@@ -19,8 +19,8 @@ export type LabelPolicyEntry = {
 	removeWhen?: string;
 	examples?: string[];
 	threshold?: number;
-	auto?: boolean;
-	remove?: boolean;
+	canApply?: boolean;
+	canRemove?: boolean;
 	context?: LabelContext;
 };
 
@@ -38,8 +38,8 @@ export type LabelDefinition = {
 	removeWhen?: string;
 	examples?: string[];
 	threshold?: number;
-	auto?: boolean;
-	remove?: boolean;
+	canApply?: boolean;
+	canRemove?: boolean;
 	context?: LabelContext;
 };
 
@@ -49,8 +49,8 @@ const labelPolicyEntrySchema = z.object({
 	remove_when: z.string().optional(),
 	examples: z.array(z.string()).optional(),
 	threshold: z.coerce.number().min(0).max(1).optional(),
-	auto: z.boolean().optional(),
-	remove: z.boolean().optional(),
+	can_apply: z.boolean().optional(),
+	can_remove: z.boolean().optional(),
 	context: z.enum(LABEL_CONTEXTS).optional(),
 });
 
@@ -89,8 +89,8 @@ export function parseLabelPolicy(content: string): Result<LabelPolicy, InvalidLa
 			removeWhen: emptyToUndefined(entry.remove_when),
 			examples: entry.examples?.filter((example) => example.trim().length > 0),
 			threshold: entry.threshold,
-			auto: entry.auto,
-			remove: entry.remove,
+			canApply: entry.can_apply,
+			canRemove: entry.can_remove,
 			context: entry.context,
 		};
 	}
@@ -153,8 +153,8 @@ export function mergeLabelPolicy(
 				removeWhen: matching.removeWhen,
 				examples: matching.examples,
 				threshold: matching.threshold,
-				auto: matching.auto,
-				remove: matching.remove,
+				canApply: matching.canApply,
+				canRemove: matching.canRemove,
 				...(matching.context ? { context: matching.context } : {}),
 			},
 		];

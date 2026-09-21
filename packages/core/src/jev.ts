@@ -16,8 +16,8 @@ export type LabelJudgment = {
 	noul: number;
 	threshold: number;
 	apply: boolean;
-	auto: boolean;
-	remove: boolean;
+	canApply: boolean;
+	canRemove: boolean;
 };
 
 export type LabelDecision = {
@@ -204,8 +204,8 @@ export function collectDecisions(
 				noul: noulValue,
 				threshold: labelThreshold,
 				apply: noulValue >= labelThreshold,
-				auto: label.auto !== false,
-				remove: label.remove !== false,
+				canApply: label.canApply !== false,
+				canRemove: label.canRemove !== false,
 			};
 		});
 
@@ -220,7 +220,7 @@ export function collectDecisions(
 export function labelsToApply(decision: LabelDecision): string[] {
 	const existing = new Set(decision.item.currentLabels.map((name) => name.toLowerCase()));
 	return decision.labels
-		.filter((label) => label.apply && label.auto && !existing.has(label.name.toLowerCase()))
+		.filter((label) => label.apply && label.canApply && !existing.has(label.name.toLowerCase()))
 		.map((label) => label.name);
 }
 
@@ -231,8 +231,7 @@ export function labelsToRemove(decision: LabelDecision): string[] {
 		.filter(
 			(label) =>
 				existing.has(label.name.toLowerCase()) &&
-				label.auto &&
-				label.remove &&
+				label.canRemove &&
 				!label.apply &&
 				label.noul < 1 - label.threshold
 		)
