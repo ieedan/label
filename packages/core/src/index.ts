@@ -22,6 +22,7 @@ export type {
 	ItemKind,
 	LabelItem,
 	RepoLabel,
+	SimilarItem,
 } from './github';
 export {
 	addIssueLabels,
@@ -40,23 +41,37 @@ export {
 	removeIssueLabels,
 	resolveIssueSelection,
 	resolveItemKind,
+	SIMILAR_ITEMS_LIMIT,
+	searchSimilarItems,
+	similarSearchQuery,
 } from './github';
-export type { AskContext, AskSystemOne, LabelDecision, LabelJudgment } from './jev';
+export type {
+	AskContext,
+	AskSystemOne,
+	ContextLabeledItem,
+	LabelDecision,
+	LabelJudgment,
+} from './jev';
 export {
+	askContextLabels,
 	askLabels,
+	buildContextRequest,
 	buildRequest,
+	chunkContextItems,
 	chunkItems,
 	collectDecisions,
 	DEFAULT_LABEL_THRESHOLD,
 	labelsToApply,
 	labelsToRemove,
+	mergeDecisions,
 	questionId,
 } from './jev';
 export type { LabelIssuesOptions, LabelIssuesResult, LabelOptions, LabelResult } from './label';
 export { label, labelIssues } from './label';
-export type { LabelDefinition, LabelPolicy, LabelPolicyEntry } from './policy';
+export type { LabelContext, LabelDefinition, LabelPolicy, LabelPolicyEntry } from './policy';
 export {
 	findLabelPolicyFile,
+	LABEL_CONTEXTS,
 	LABEL_POLICY_FILENAMES,
 	mergeLabelPolicy,
 	parseLabelPolicy,

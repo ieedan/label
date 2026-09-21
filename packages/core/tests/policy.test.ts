@@ -18,11 +18,14 @@ only_configured: true
 labels:
   bug:
     apply_when: Reproducible incorrect behavior.
-    not_when: Missing features.
+    remove_when: Missing features.
     examples:
       - Crash when input is empty
     threshold: 0.7
     remove: false
+  duplicate:
+    context: similar_issues
+    apply_when: The same report already exists.
   good first issue:
     auto: false
     threshold: 0.85
@@ -34,10 +37,14 @@ labels:
 			expect(result.value.onlyConfigured).toBe(true);
 			expect(result.value.labels.bug).toMatchObject({
 				applyWhen: 'Reproducible incorrect behavior.',
-				notWhen: 'Missing features.',
+				removeWhen: 'Missing features.',
 				examples: ['Crash when input is empty'],
 				threshold: 0.7,
 				remove: false,
+			});
+			expect(result.value.labels.duplicate).toMatchObject({
+				context: 'similar_issues',
+				applyWhen: 'The same report already exists.',
 			});
 			expect(result.value.labels['good first issue']).toMatchObject({
 				auto: false,
@@ -56,6 +63,10 @@ labels:
 
 	it('rejects invalid YAML', () => {
 		expect(parseLabelPolicy('labels: [').isErr()).toBe(true);
+	});
+
+	it('rejects an unknown context', () => {
+		expect(parseLabelPolicy('labels:\n  bug:\n    context: entire_repo\n').isErr()).toBe(true);
 	});
 });
 
@@ -83,7 +94,7 @@ describe('mergeLabelPolicy', () => {
 					description: 'Something is broken.',
 					color: 'd73a4a',
 					applyWhen: 'Reproducible incorrect behavior.',
-					notWhen: undefined,
+					removeWhen: undefined,
 					examples: undefined,
 					threshold: 0.8,
 					auto: undefined,
@@ -99,6 +110,25 @@ describe('mergeLabelPolicy', () => {
 			labels: { typo: { applyWhen: 'Nope' } },
 		});
 		expect(result.isErr()).toBe(true);
+	});
+
+	it('attaches similar_issues context to matching labels', () => {
+		const result = mergeLabelPolicy(
+			[...github, { name: 'duplicate', description: 'Already reported.', color: 'cccccc' }],
+			{
+				labels: {
+					duplicate: { context: 'similar_issues', applyWhen: 'Same report exists.' },
+				},
+			}
+		);
+
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value.find((label) => label.name === 'duplicate')).toMatchObject({
+				context: 'similar_issues',
+				applyWhen: 'Same report exists.',
+			});
+		}
 	});
 
 	it('keeps only configured labels when onlyConfigured is set', () => {
@@ -117,7 +147,7 @@ describe('mergeLabelPolicy', () => {
 					description: 'Something is broken.',
 					color: 'd73a4a',
 					applyWhen: 'Reproducible incorrect behavior.',
-					notWhen: undefined,
+					removeWhen: undefined,
 					examples: undefined,
 					threshold: undefined,
 					auto: undefined,

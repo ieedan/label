@@ -38,6 +38,41 @@ export type LabelItem = {
 
 export const MAX_CONVERSATION_COMMENTS = 25;
 export const MAX_COMMENT_BODY_CHARS = 1000;
+export const SIMILAR_ITEMS_LIMIT = 20;
+export const MAX_CANDIDATE_BODY_CHARS = 800;
+
+const SEARCH_STOPWORDS = new Set([
+	'a',
+	'an',
+	'and',
+	'are',
+	'as',
+	'at',
+	'be',
+	'by',
+	'can',
+	'do',
+	'does',
+	'for',
+	'from',
+	'if',
+	'in',
+	'into',
+	'is',
+	'it',
+	'its',
+	'not',
+	'of',
+	'on',
+	'or',
+	'that',
+	'the',
+	'this',
+	'to',
+	'was',
+	'were',
+	'with',
+]);
 
 export type GitHubRepo = {
 	owner: string;
@@ -373,6 +408,75 @@ export async function listIssues(
 	return ok(issues);
 }
 
+export type SimilarItem = {
+	number: number;
+	title: string;
+	body: string;
+	type: 'issue' | 'pull_request';
+};
+
+export function similarSearchQuery(
+	repo: GitHubRepo,
+	item: Pick<LabelItem, 'title' | 'type'>
+): string | undefined {
+	const keywords = [
+		...new Set(
+			item.title
+				.toLowerCase()
+				.split(/[^a-z0-9]+/)
+				.filter((word) => word.length >= 3 && !SEARCH_STOPWORDS.has(word))
+		),
+	].slice(0, 8);
+	if (keywords.length === 0) return undefined;
+
+	const kind = item.type === 'pull_request' ? 'is:pr' : 'is:issue';
+	return `${keywords.join(' ')} repo:${repo.owner}/${repo.name} ${kind}`;
+}
+
+export async function searchSimilarItems(
+	repo: GitHubRepo,
+	item: Pick<LabelItem, 'number' | 'title' | 'type'>,
+	options: GitHubClientOptions & { limit?: number } = {}
+): Promise<Result<SimilarItem[], GitHubApiError | MissingGitHubTokenError>> {
+	const query = similarSearchQuery(repo, item);
+	if (!query) return ok([]);
+
+	const tokenResult = requireToken(options.token);
+	if (tokenResult.isErr()) return err(tokenResult.error);
+
+	const limit = options.limit ?? SIMILAR_ITEMS_LIMIT;
+	const params = new URLSearchParams({
+		q: query,
+		per_page: String(Math.min(100, limit + 5)),
+	});
+	const result = await githubJson<{
+		items?: Array<{
+			number: number;
+			title: string;
+			body?: string | null;
+			pull_request?: unknown;
+		}>;
+	}>(`/search/issues?${params}`, {
+		token: tokenResult.value,
+		fetch: options.fetch,
+	});
+	if (result.isErr()) return err(result.error);
+
+	const candidates: SimilarItem[] = [];
+	for (const match of result.value.items ?? []) {
+		if (match.number === item.number) continue;
+		candidates.push({
+			number: match.number,
+			title: match.title,
+			body: truncateText(match.body ?? '', MAX_CANDIDATE_BODY_CHARS),
+			type: match.pull_request !== undefined ? 'pull_request' : 'issue',
+		});
+		if (candidates.length >= limit) break;
+	}
+
+	return ok(candidates);
+}
+
 export async function listItemConversation(
 	repo: GitHubRepo,
 	item: Pick<LabelItem, 'number' | 'type'>,
@@ -439,9 +543,13 @@ function toFetchedComment(raw: GitHubComment, kind: ItemComment['kind']): ItemCo
 }
 
 function truncateCommentBody(body: string): string {
+	return truncateText(body, MAX_COMMENT_BODY_CHARS);
+}
+
+function truncateText(body: string, maxChars: number): string {
 	const collapsed = body.replace(/\s+/g, ' ').trim();
-	if (collapsed.length <= MAX_COMMENT_BODY_CHARS) return collapsed;
-	return `${collapsed.slice(0, MAX_COMMENT_BODY_CHARS - 1)}…`;
+	if (collapsed.length <= maxChars) return collapsed;
+	return `${collapsed.slice(0, maxChars - 1)}…`;
 }
 
 function compareComments(left: ItemComment, right: ItemComment): number {

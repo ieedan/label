@@ -72,6 +72,39 @@ describe('label', () => {
 			expect(result.value.decisions[0]?.chosen).toEqual([]);
 		}
 	});
+
+	it('asks context labels against comments when GitHub search is unavailable', async () => {
+		let calls = 0;
+
+		const result = await label({
+			payload: {
+				issue: { number: 12, title: 'Crash', body: 'Same as #3' },
+				repository: { full_name: 'ieedan/label' },
+			},
+			labels: [
+				{
+					name: 'duplicate',
+					description: 'Already reported.',
+					context: 'similar_issues',
+				},
+			],
+			ask: async ({ state, questions }) => {
+				calls += 1;
+				expect(state).toMatchObject({
+					items: [{ number: 12, candidates: [] }],
+					labels: [{ name: 'duplicate', context: 'similar_issues' }],
+				});
+				expect(Object.keys(questions)).toEqual([questionId(0, 0)]);
+				return { answers: { [questionId(0, 0)]: { noul: 0.81 } } };
+			},
+		});
+
+		expect(calls).toBe(1);
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value.decisions[0]?.chosen).toEqual(['duplicate']);
+		}
+	});
 });
 
 describe('labelIssues', () => {
@@ -700,5 +733,90 @@ describe('labelIssues', () => {
 		});
 
 		expect(result.isOk()).toBe(true);
+	});
+
+	it('keeps local labels in the first Jev request and compares similar issues in a second', async () => {
+		const searches: string[] = [];
+		const asks: unknown[] = [];
+
+		const result = await labelIssues({
+			repo: 'ieedan/label',
+			numbers: ['12'],
+			dryRun: true,
+			token: 'test-token',
+			policy: {
+				labels: {
+					duplicate: {
+						context: 'similar_issues',
+						applyWhen: 'The same report already exists.',
+					},
+				},
+			},
+			fetch: async (input) => {
+				const url = String(input);
+				const conversation = emptyConversation(url);
+				if (conversation) return conversation;
+				if (url.includes('/search/issues')) {
+					searches.push(url);
+					return Response.json({
+						items: [
+							{ number: 12, title: 'Crash on empty input', body: 'Current.' },
+							{ number: 3, title: 'Crash when input is empty', body: 'Same bug.' },
+						],
+					});
+				}
+				if (url.includes('/labels')) {
+					return Response.json([
+						...labels,
+						{ name: 'duplicate', description: 'Already reported.' },
+					]);
+				}
+				if (url.endsWith('/issues/12')) {
+					return Response.json({
+						number: 12,
+						title: 'Crash on empty input',
+						body: 'It crashes',
+					});
+				}
+				throw new Error(`unexpected ${url}`);
+			},
+			ask: async ({ state, questions }) => {
+				asks.push(state);
+				if ((state as { items: Array<{ candidates?: unknown }> }).items[0]?.candidates) {
+					expect(state).toMatchObject({
+						items: [
+							{
+								number: 12,
+								candidates: [{ number: 3, title: 'Crash when input is empty' }],
+							},
+						],
+						labels: [{ name: 'duplicate', context: 'similar_issues' }],
+					});
+					expect(Object.keys(questions)).toEqual([questionId(0, 0)]);
+					return { answers: { [questionId(0, 0)]: { noul: 0.93 } } };
+				}
+
+				expect(state).toMatchObject({
+					items: [{ number: 12 }],
+					labels: [{ name: 'bug' }, { name: 'enhancement' }],
+				});
+				expect(
+					(state as { items: Array<{ candidates?: unknown }> }).items[0]?.candidates
+				).toBeUndefined();
+				return {
+					answers: {
+						[questionId(0, 0)]: { noul: 0.9 },
+						[questionId(0, 1)]: { noul: 0.1 },
+					},
+				};
+			},
+		});
+
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value.decisions[0]?.chosen).toEqual(['bug', 'duplicate']);
+		}
+		expect(searches).toHaveLength(1);
+		expect(asks).toHaveLength(2);
 	});
 });

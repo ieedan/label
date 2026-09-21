@@ -26,7 +26,9 @@ pnpm start label -R owner/name --top 10 --dry-run --prompt "Prefer bug over enha
 
 The table shows chosen labels with their noul scores. Scores close to the threshold are yellow; scores that exceed it by a wide margin are green.
 
-Jev sees each item's title, body, and comment thread (including pull request reviews).
+Jev sees each item's title, body, and comment thread (including pull request reviews). Labels with `context: similar_issues` get a second pass: GitHub search finds a shortlist of related items, then Jev compares the current item to those candidates.
+
+## Steering labels
 
 ## Steering labels
 
@@ -39,22 +41,28 @@ only_configured: true
 labels:
   bug:
     apply_when: Reproducible incorrect behavior in existing functionality.
-    not_when: Missing features, questions, or docs typos.
+    remove_when: Missing features, questions, or docs typos.
     examples:
       - Crash when input is empty
     threshold: 0.7
     remove: false
   good first issue:
     apply_when: Small, well-scoped change a new contributor could land.
-    not_when: Needs design discussion or deep repo context.
+    remove_when: Needs design discussion or deep repo context.
     threshold: 0.85
     auto: false
   needs reproduction:
     apply_when: The report is incomplete and cannot be acted on without more detail.
-    not_when: Steps, expected result, and actual result are already present.
+    remove_when: Steps, expected result, and actual result are already present.
+  duplicate:
+    context: similar_issues
+    apply_when: The same report already exists in this repository.
+    remove_when: The item is a distinct bug, request, or follow-up.
 ```
 
-Unlisted labels still use the GitHub name and description unless `only_configured: true`, which limits Jev to labels listed in this file. `auto: false` shows the label as a suggestion and does not apply or remove it. `remove: false` keeps the label if it is already on the item. Labels are removed only when Jev is clearly below the threshold (`noul < 1 - threshold`), so scores near the cutoff are left alone. `--prompt` is extra steering on top of this file.
+Unlisted labels still use the GitHub name and description unless `only_configured: true`, which limits Jev to labels listed in this file. `apply_when` is when the label belongs; `remove_when` is when it should come off. `auto: false` shows the label as a suggestion and does not apply or remove it. `remove: false` keeps the label if it is already on the item. Labels are removed only when Jev is clearly below the threshold (`noul < 1 - threshold`), so scores near the cutoff are left alone. `--prompt` is extra steering on top of this file.
+
+`context: similar_issues` is for labels that depend on other issues, such as `duplicate`. Jev still sees the current item and its comments; code adds a shortlist of similar issues (title plus a short body excerpt) instead of the rest of the repository.
 
 ## GitHub Actions
 

@@ -6,6 +6,8 @@ import {
 	parseRepo,
 	resolveIssueSelection,
 	resolveItemKind,
+	searchSimilarItems,
+	similarSearchQuery,
 } from '../src/github.js';
 
 describe('parseRepo', () => {
@@ -197,6 +199,110 @@ describe('parseGitHubPayload', () => {
 					kind: 'comment',
 				},
 			]);
+		}
+	});
+});
+
+describe('similarSearchQuery', () => {
+	it('keeps distinctive title words and scopes to the repo', () => {
+		expect(
+			similarSearchQuery(
+				{ owner: 'ieedan', name: 'label' },
+				{ title: 'Crash on empty input in the CLI', type: 'issue' }
+			)
+		).toBe('crash empty input cli repo:ieedan/label is:issue');
+	});
+
+	it('uses is:pr for pull requests', () => {
+		expect(
+			similarSearchQuery(
+				{ owner: 'ieedan', name: 'label' },
+				{ title: 'Add dark mode', type: 'pull_request' }
+			)
+		).toBe('add dark mode repo:ieedan/label is:pr');
+	});
+
+	it('returns undefined when the title has no usable keywords', () => {
+		expect(
+			similarSearchQuery(
+				{ owner: 'ieedan', name: 'label' },
+				{ title: 'a to the', type: 'issue' }
+			)
+		).toBeUndefined();
+	});
+});
+
+describe('searchSimilarItems', () => {
+	it('searches GitHub, skips the current item, and truncates bodies', async () => {
+		const result = await searchSimilarItems(
+			{ owner: 'ieedan', name: 'label' },
+			{ number: 12, title: 'Crash on empty input', type: 'issue' },
+			{
+				token: 'test-token',
+				limit: 2,
+				fetch: async (input) => {
+					const url = new URL(String(input));
+					expect(url.pathname).toBe('/search/issues');
+					expect(url.searchParams.get('q')).toBe(
+						'crash empty input repo:ieedan/label is:issue'
+					);
+					return Response.json({
+						items: [
+							{
+								number: 12,
+								title: 'Crash on empty input',
+								body: 'This is the current issue.',
+							},
+							{
+								number: 3,
+								title: 'Crash when input is empty',
+								body: `${'x'.repeat(900)} leftover`,
+							},
+							{
+								number: 4,
+								title: 'Another crash',
+								body: 'Short.',
+							},
+							{
+								number: 5,
+								title: 'Should not be included',
+								body: 'Extra.',
+							},
+						],
+					});
+				},
+			}
+		);
+
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value).toHaveLength(2);
+			expect(result.value[0]).toMatchObject({
+				number: 3,
+				title: 'Crash when input is empty',
+				type: 'issue',
+			});
+			expect(result.value[0]?.body).toHaveLength(800);
+			expect(result.value[0]?.body.endsWith('…')).toBe(true);
+			expect(result.value[1]?.number).toBe(4);
+		}
+	});
+
+	it('returns no candidates when the title cannot form a query', async () => {
+		const result = await searchSimilarItems(
+			{ owner: 'ieedan', name: 'label' },
+			{ number: 1, title: 'a', type: 'issue' },
+			{
+				token: 'test-token',
+				fetch: async () => {
+					throw new Error('should not search');
+				},
+			}
+		);
+
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value).toEqual([]);
 		}
 	});
 });

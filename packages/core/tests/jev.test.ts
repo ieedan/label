@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { LabelItem, RepoLabel } from '../src/github.js';
 import {
+	buildContextRequest,
 	buildRequest,
+	chunkContextItems,
 	chunkItems,
 	collectDecisions,
 	labelsToApply,
 	labelsToRemove,
+	mergeDecisions,
 	questionId,
 	REQUEST_CHAR_BUDGET,
 } from '../src/jev.js';
@@ -55,7 +58,7 @@ describe('buildRequest', () => {
 					name: 'bug',
 					description: 'Something is broken.',
 					applyWhen: 'Reproducible incorrect behavior.',
-					notWhen: 'Missing features.',
+					removeWhen: 'Missing features.',
 					examples: ['Crash when input is empty'],
 				},
 			],
@@ -69,14 +72,14 @@ describe('buildRequest', () => {
 				{
 					name: 'bug',
 					apply_when: 'Reproducible incorrect behavior.',
-					not_when: 'Missing features.',
+					remove_when: 'Missing features.',
 					examples: ['Crash when input is empty'],
 				},
 			],
 		});
 		expect(questions[questionId(0, 0)]?.instructions).toMatchObject({
 			judge_from: expect.stringContaining('`prompt`'),
-			label: expect.stringContaining('apply_when'),
+			label: expect.stringContaining('remove_when'),
 		});
 	});
 });
@@ -191,5 +194,94 @@ describe('chunkItems', () => {
 		const huge = item(1, 'x'.repeat(REQUEST_CHAR_BUDGET));
 		const chunks = chunkItems([huge, item(2)], labels);
 		expect(chunks.length).toBeGreaterThan(1);
+	});
+});
+
+describe('buildContextRequest', () => {
+	it('puts candidates on each item and asks one Noul per context label', () => {
+		const { state, questions } = buildContextRequest(
+			[
+				{
+					item: item(12, 'Crash on empty input'),
+					candidates: [
+						{
+							number: 3,
+							title: 'Crash when input is empty',
+							body: 'Same bug.',
+							type: 'issue',
+						},
+					],
+				},
+			],
+			[
+				{
+					name: 'duplicate',
+					description: 'Already reported.',
+					context: 'similar_issues',
+					applyWhen: 'The same report already exists.',
+				},
+			]
+		);
+
+		expect(state.items).toEqual([
+			expect.objectContaining({
+				number: 12,
+				candidates: [
+					{
+						number: 3,
+						title: 'Crash when input is empty',
+						body: 'Same bug.',
+						type: 'issue',
+					},
+				],
+			}),
+		]);
+		expect(state.labels).toEqual([
+			expect.objectContaining({ name: 'duplicate', context: 'similar_issues' }),
+		]);
+		expect(questions[questionId(0, 0)]?.instructions).toMatchObject({
+			judge_from: expect.stringContaining('candidates'),
+			label: expect.stringContaining('comments already identify'),
+		});
+	});
+});
+
+describe('chunkContextItems', () => {
+	it('splits when candidates would exceed the character budget', () => {
+		const huge = {
+			item: item(1),
+			candidates: [
+				{
+					number: 2,
+					title: 'x'.repeat(REQUEST_CHAR_BUDGET),
+					body: '',
+					type: 'issue' as const,
+				},
+			],
+		};
+		const small = { item: item(3), candidates: [] };
+		expect(chunkContextItems([huge, small], labels).length).toBeGreaterThan(1);
+	});
+});
+
+describe('mergeDecisions', () => {
+	it('combines local and context-label judgments for the same item', () => {
+		const local = collectDecisions(
+			[item(1)],
+			labels,
+			{
+				[questionId(0, 0)]: { noul: 0.91 },
+				[questionId(0, 1)]: { noul: 0.12 },
+			},
+			0.6
+		);
+		const extra = collectDecisions(
+			[item(1)],
+			[{ name: 'duplicate', description: null }],
+			{ [questionId(0, 0)]: { noul: 0.88 } },
+			0.6
+		);
+
+		expect(mergeDecisions(local, extra)[0]?.chosen).toEqual(['bug', 'duplicate']);
 	});
 });

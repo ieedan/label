@@ -1,7 +1,7 @@
 import { type EntryType, type NoulQuestion, noul, TypeSafeClient } from '@typesafe-ai/sdk';
 import { err, ok, type Result } from 'nevereverthrow';
 import { MissingTypeSafeApiKeyError, TypeSafeRequestError } from './errors';
-import type { LabelItem } from './github';
+import type { LabelItem, SimilarItem } from './github';
 import type { LabelDefinition } from './policy';
 
 /** Conservative cap under TypeSafe's ~150,000 character / ~32,000 token request budget. */
@@ -56,8 +56,9 @@ export function labelState(label: LabelDefinition) {
 		name: label.name,
 		description: label.description ?? 'No description provided.',
 		...(label.applyWhen ? { apply_when: label.applyWhen } : {}),
-		...(label.notWhen ? { not_when: label.notWhen } : {}),
+		...(label.removeWhen ? { remove_when: label.removeWhen } : {}),
 		...(label.examples && label.examples.length > 0 ? { examples: label.examples } : {}),
+		...(label.context ? { context: label.context } : {}),
 	};
 }
 
@@ -82,7 +83,58 @@ export function buildRequest(
 				{
 					question: `Should the GitHub label at \`${labelPath}\` be applied to \`${itemPath}\`?`,
 					judge_from: `\`${itemPath}.title\`, \`${itemPath}.body\`, and \`${itemPath}.comments\` (the discussion between users). \`${itemPath}.type\` is issue or pull_request. Honor \`policy\` when present (repo labeling rules) and \`prompt\` when present (extra instructions for this run).`,
-					label: `Use \`${labelPath}.name\` and \`${labelPath}.description\` as the meaning of the label. If \`${labelPath}.apply_when\` is present, require a match. If \`${labelPath}.not_when\` is present, do not apply when it matches. If \`${labelPath}.examples\` is present, treat them as typical matches.`,
+					label: `Use \`${labelPath}.name\` and \`${labelPath}.description\` as the meaning of the label. If \`${labelPath}.apply_when\` is present, require a match. If \`${labelPath}.remove_when\` is present, do not apply when it matches; remove the label if it is already on the item. If \`${labelPath}.examples\` is present, treat them as typical matches.`,
+				},
+				{
+					true: 'The item matches this label and the label should be applied.',
+					false: 'The item does not match this label.',
+				}
+			);
+		}
+	}
+
+	return { state, questions };
+}
+
+export type ContextLabeledItem = {
+	item: LabelItem;
+	candidates: SimilarItem[];
+};
+
+export function candidateState(candidate: SimilarItem) {
+	return {
+		number: candidate.number,
+		title: candidate.title,
+		body: candidate.body,
+		type: candidate.type,
+	};
+}
+
+export function buildContextRequest(
+	items: ContextLabeledItem[],
+	labels: LabelDefinition[],
+	context: AskContext = {}
+) {
+	const state = {
+		policy: context.policy ?? null,
+		prompt: context.prompt ?? null,
+		items: items.map(({ item, candidates }) => ({
+			...itemState(item),
+			candidates: candidates.map(candidateState),
+		})),
+		labels: labels.map(labelState),
+	};
+
+	const questions: Record<string, NoulQuestion> = {};
+	for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+		for (let labelIndex = 0; labelIndex < labels.length; labelIndex++) {
+			const itemPath = `items[${itemIndex}]`;
+			const labelPath = `labels[${labelIndex}]`;
+			questions[questionId(itemIndex, labelIndex)] = noul(
+				{
+					question: `Should the GitHub label at \`${labelPath}\` be applied to \`${itemPath}\`?`,
+					judge_from: `\`${itemPath}.title\`, \`${itemPath}.body\`, \`${itemPath}.comments\`, and \`${itemPath}.candidates\` (other issues or pull requests that may already cover this report). \`${itemPath}.type\` is issue or pull_request. Honor \`policy\` when present (repo labeling rules) and \`prompt\` when present (extra instructions for this run).`,
+					label: `Use \`${labelPath}.name\` and \`${labelPath}.description\` as the meaning of the label. If \`${labelPath}.apply_when\` is present, require a match. If \`${labelPath}.remove_when\` is present, do not apply when it matches; remove the label if it is already on the item. If \`${labelPath}.examples\` is present, treat them as typical matches. Apply when comments already identify a matching existing item, or when a candidate is the same report (or otherwise matches the label). If \`${itemPath}.candidates\` is empty, rely on the item and its comments only.`,
 				},
 				{
 					true: 'The item matches this label and the label should be applied.',
@@ -100,14 +152,26 @@ export function chunkItems(
 	labels: LabelDefinition[],
 	context: AskContext = {}
 ): LabelItem[][] {
+	return chunkWhile(items, (chunk) => fitsBudget(buildRequest(chunk, labels, context)));
+}
+
+export function chunkContextItems(
+	items: ContextLabeledItem[],
+	labels: LabelDefinition[],
+	context: AskContext = {}
+): ContextLabeledItem[][] {
+	return chunkWhile(items, (chunk) => fitsBudget(buildContextRequest(chunk, labels, context)));
+}
+
+function chunkWhile<T>(items: T[], fits: (chunk: T[]) => boolean): T[][] {
 	if (items.length === 0) return [];
 
-	const chunks: LabelItem[][] = [];
-	let current: LabelItem[] = [];
+	const chunks: T[][] = [];
+	let current: T[] = [];
 
 	for (const item of items) {
 		const next = [...current, item];
-		if (current.length > 0 && !fitsBudget(next, labels, context)) {
+		if (current.length > 0 && !fits(next)) {
 			chunks.push(current);
 			current = [item];
 		} else {
@@ -119,8 +183,7 @@ export function chunkItems(
 	return chunks;
 }
 
-function fitsBudget(items: LabelItem[], labels: LabelDefinition[], context: AskContext): boolean {
-	const request = buildRequest(items, labels, context);
+function fitsBudget(request: { state: unknown; questions: unknown }): boolean {
 	return JSON.stringify(request).length <= REQUEST_CHAR_BUDGET;
 }
 
@@ -210,6 +273,61 @@ export async function askLabels(
 	} catch (error) {
 		return err(new TypeSafeRequestError(error));
 	}
+}
+
+export async function askContextLabels(
+	items: ContextLabeledItem[],
+	labels: LabelDefinition[],
+	options: {
+		threshold: number;
+		policy?: string;
+		prompt?: string;
+		client?: TypeSafeClient;
+		ask?: AskSystemOne;
+	}
+): Promise<Result<LabelDecision[], MissingTypeSafeApiKeyError | TypeSafeRequestError>> {
+	if (items.length === 0) return ok([]);
+	if (labels.length === 0) {
+		return ok(items.map(({ item }) => ({ item, labels: [], chosen: [] })));
+	}
+
+	const askResult = resolveAsk(options);
+	if (askResult.isErr()) return err(askResult.error);
+	const ask = askResult.value;
+	const context = { policy: options.policy, prompt: options.prompt };
+
+	const chunks = chunkContextItems(items, labels, context);
+	try {
+		const nested = await Promise.all(
+			chunks.map(async (chunk) => {
+				const request = buildContextRequest(chunk, labels, context);
+				const response = await ask(request);
+				return collectDecisions(
+					chunk.map(({ item }) => item),
+					labels,
+					response.answers,
+					options.threshold
+				);
+			})
+		);
+		return ok(nested.flat());
+	} catch (error) {
+		return err(new TypeSafeRequestError(error));
+	}
+}
+
+export function mergeDecisions(base: LabelDecision[], extra: LabelDecision[]): LabelDecision[] {
+	const extraByNumber = new Map(extra.map((decision) => [decision.item.number, decision]));
+	return base.map((decision) => {
+		const more = extraByNumber.get(decision.item.number);
+		if (!more) return decision;
+		const labels = [...decision.labels, ...more.labels];
+		return {
+			item: decision.item,
+			labels,
+			chosen: labels.filter((label) => label.apply).map((label) => label.name),
+		};
+	});
 }
 
 function resolveAsk(options: {

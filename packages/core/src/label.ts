@@ -15,29 +15,40 @@ import {
 	listRepoLabels,
 	parseGitHubPayload,
 	parseRepo,
-	type RepoLabel,
 	removeIssueLabels,
 	resolveIssueSelection,
 	resolveItemKind,
+	type SimilarItem,
+	searchSimilarItems,
 } from './github';
 import {
 	type AskSystemOne,
+	askContextLabels,
 	askLabels,
 	DEFAULT_LABEL_THRESHOLD,
 	type LabelDecision,
 	labelsToApply,
 	labelsToRemove,
+	mergeDecisions,
 } from './jev';
-import { type LabelPolicy, mergeLabelPolicy, readLabelPolicy } from './policy';
+import {
+	type LabelDefinition,
+	type LabelPolicy,
+	mergeLabelPolicy,
+	readLabelPolicy,
+} from './policy';
 
 export type LabelOptions = {
 	payload: unknown | unknown[];
-	labels: RepoLabel[];
+	labels: LabelDefinition[];
 	threshold?: number;
 	policy?: string;
 	prompt?: string;
 	client?: TypeSafeClient;
 	ask?: AskSystemOne;
+	repo?: string | GitHubRepo;
+	token?: string;
+	fetch?: typeof fetch;
 };
 
 export type LabelResult = {
@@ -80,16 +91,39 @@ export async function label(options: LabelOptions): Promise<Result<LabelResult, 
 		items.push(parsed.value);
 	}
 
-	const decisions = await askLabels(items, options.labels, {
+	const askOptions = {
 		threshold: options.threshold ?? DEFAULT_LABEL_THRESHOLD,
 		policy: options.policy,
 		prompt: options.prompt,
 		client: options.client,
 		ask: options.ask,
-	});
-	if (decisions.isErr()) return err(decisions.error);
+	};
 
-	return ok({ decisions: decisions.value });
+	const localLabels = options.labels.filter((label) => label.context !== 'similar_issues');
+	const similarLabels = options.labels.filter((label) => label.context === 'similar_issues');
+
+	const localDecisions = await askLabels(items, localLabels, askOptions);
+	if (localDecisions.isErr()) return err(localDecisions.error);
+
+	if (similarLabels.length === 0) {
+		return ok({ decisions: localDecisions.value });
+	}
+
+	const withCandidates = await loadSimilarCandidates(items, {
+		repo: options.repo,
+		token: options.token,
+		fetch: options.fetch,
+	});
+	if (withCandidates.isErr()) return err(withCandidates.error);
+
+	const contextDecisions = await askContextLabels(
+		withCandidates.value,
+		similarLabels,
+		askOptions
+	);
+	if (contextDecisions.isErr()) return err(contextDecisions.error);
+
+	return ok({ decisions: mergeDecisions(localDecisions.value, contextDecisions.value) });
 }
 
 export async function labelIssues(
@@ -143,6 +177,9 @@ export async function labelIssues(
 		prompt: options.prompt,
 		client: options.client,
 		ask: options.ask,
+		repo,
+		token: github.token,
+		fetch: github.fetch,
 	});
 	if (labeled.isErr()) return err(labeled.error);
 
@@ -257,4 +294,41 @@ async function toPayloadWithConversation(
 		repository: { full_name: repoName },
 		conversation: conversation.value,
 	});
+}
+
+async function loadSimilarCandidates(
+	items: LabelItem[],
+	options: {
+		repo?: string | GitHubRepo;
+		token?: string;
+		fetch?: typeof fetch;
+	}
+): Promise<Result<Array<{ item: LabelItem; candidates: SimilarItem[] }>, LabelError>> {
+	const github: GitHubClientOptions = { token: options.token, fetch: options.fetch };
+	const results: Array<{ item: LabelItem; candidates: SimilarItem[] }> = [];
+
+	for (const item of items) {
+		const repo = resolveSearchRepo(options.repo, item);
+		if (!repo || !(options.token || options.fetch)) {
+			results.push({ item, candidates: [] });
+			continue;
+		}
+
+		const searched = await searchSimilarItems(repo, item, github);
+		if (searched.isErr()) return err(searched.error);
+		results.push({ item, candidates: searched.value });
+	}
+
+	return ok(results);
+}
+
+function resolveSearchRepo(
+	repo: string | GitHubRepo | undefined,
+	item: LabelItem
+): GitHubRepo | undefined {
+	if (repo && typeof repo === 'object') return repo;
+	const raw = typeof repo === 'string' ? repo : item.repository;
+	if (!raw) return undefined;
+	const parsed = parseRepo(raw);
+	return parsed.isOk() ? parsed.value : undefined;
 }

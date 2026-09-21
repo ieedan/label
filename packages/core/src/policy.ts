@@ -9,14 +9,19 @@ import type { RepoLabel } from './github';
 
 export const LABEL_POLICY_FILENAMES = ['.label.yml', '.label.yaml'] as const;
 
+export const LABEL_CONTEXTS = ['similar_issues'] as const;
+
+export type LabelContext = (typeof LABEL_CONTEXTS)[number];
+
 export type LabelPolicyEntry = {
 	description?: string;
 	applyWhen?: string;
-	notWhen?: string;
+	removeWhen?: string;
 	examples?: string[];
 	threshold?: number;
 	auto?: boolean;
 	remove?: boolean;
+	context?: LabelContext;
 };
 
 export type LabelPolicy = {
@@ -30,21 +35,23 @@ export type LabelDefinition = {
 	description: string | null;
 	color?: string;
 	applyWhen?: string;
-	notWhen?: string;
+	removeWhen?: string;
 	examples?: string[];
 	threshold?: number;
 	auto?: boolean;
 	remove?: boolean;
+	context?: LabelContext;
 };
 
 const labelPolicyEntrySchema = z.object({
 	description: z.string().optional(),
 	apply_when: z.string().optional(),
-	not_when: z.string().optional(),
+	remove_when: z.string().optional(),
 	examples: z.array(z.string()).optional(),
 	threshold: z.coerce.number().min(0).max(1).optional(),
 	auto: z.boolean().optional(),
 	remove: z.boolean().optional(),
+	context: z.enum(LABEL_CONTEXTS).optional(),
 });
 
 const labelPolicySchema = z.object({
@@ -79,11 +86,12 @@ export function parseLabelPolicy(content: string): Result<LabelPolicy, InvalidLa
 		labels[name] = {
 			description: entry.description,
 			applyWhen: emptyToUndefined(entry.apply_when),
-			notWhen: emptyToUndefined(entry.not_when),
+			removeWhen: emptyToUndefined(entry.remove_when),
 			examples: entry.examples?.filter((example) => example.trim().length > 0),
 			threshold: entry.threshold,
 			auto: entry.auto,
 			remove: entry.remove,
+			context: entry.context,
 		};
 	}
 
@@ -142,11 +150,12 @@ export function mergeLabelPolicy(
 				description: matching.description ?? label.description,
 				color: label.color,
 				applyWhen: matching.applyWhen,
-				notWhen: matching.notWhen,
+				removeWhen: matching.removeWhen,
 				examples: matching.examples,
 				threshold: matching.threshold,
 				auto: matching.auto,
 				remove: matching.remove,
+				...(matching.context ? { context: matching.context } : {}),
 			},
 		];
 	});
