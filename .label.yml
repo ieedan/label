@@ -1,0 +1,17 @@
+only_configured: true
+
+labels:
+  bug:
+    apply_when: Something isn't working
+    remove_when: The report is a feature request, not a defect
+  documentation: 
+    apply_when: This request pertains to documentation
+    can_remove: false
+  duplicate:
+    apply_when: This issue or pull request already exists
+    context: similar_issues
+  enhancement:
+    apply_when: This request pertains to a new feature or request
+  question:
+    apply_when: Further information is requested by a maintainer
+    remove_when: The question has been answered
