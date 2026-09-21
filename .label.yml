@@ -15,3 +15,6 @@ labels:
   question:
     apply_when: Further information is requested by a maintainer
     remove_when: The question has been answered
+  slop:
+    apply_when: This issue or pull request was clearly generated using AI. Look out for em-dashes and other AI artifacts.
+    can_remove: false
