@@ -1,7 +1,8 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { MissingLabelPolicyFileError } from '../src/errors.js';
 import { mergeLabelPolicy, parseLabelPolicy, readLabelPolicy } from '../src/policy.js';
 
 const tempDirs: string[] = [];
@@ -13,7 +14,7 @@ afterEach(async () => {
 describe('parseLabelPolicy', () => {
 	it('parses overlay fields', () => {
 		const result = parseLabelPolicy(`
-policy: Prefer specific area labels.
+prompt: Prefer specific area labels.
 only_configured: true
 labels:
   bug:
@@ -33,7 +34,7 @@ labels:
 
 		expect(result.isOk()).toBe(true);
 		if (result.isOk()) {
-			expect(result.value.policy).toBe('Prefer specific area labels.');
+			expect(result.value.prompt).toBe('Prefer specific area labels.');
 			expect(result.value.onlyConfigured).toBe(true);
 			expect(result.value.labels.bug).toMatchObject({
 				applyWhen: 'Reproducible incorrect behavior.',
@@ -162,12 +163,12 @@ describe('readLabelPolicy', () => {
 	it('reads .label.yml from cwd', async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), 'label-policy-'));
 		tempDirs.push(dir);
-		await writeFile(path.join(dir, '.label.yml'), 'policy: Be conservative.\n');
+		await writeFile(path.join(dir, '.label.yml'), 'prompt: Be conservative.\n');
 
 		const result = await readLabelPolicy(dir);
 		expect(result.isOk()).toBe(true);
 		if (result.isOk()) {
-			expect(result.value.policy).toBe('Be conservative.');
+			expect(result.value.prompt).toBe('Be conservative.');
 		}
 	});
 
@@ -179,6 +180,31 @@ describe('readLabelPolicy', () => {
 		expect(result.isOk()).toBe(true);
 		if (result.isOk()) {
 			expect(result.value).toEqual({ labels: {} });
+		}
+	});
+
+	it('reads a policy from an explicit config path', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'label-policy-'));
+		tempDirs.push(dir);
+		await writeFile(path.join(dir, '.label.yml'), 'prompt: From default name.\n');
+		await mkdir(path.join(dir, 'policies'));
+		await writeFile(path.join(dir, 'policies', 'frontend.yml'), 'prompt: From custom path.\n');
+
+		const result = await readLabelPolicy(dir, 'policies/frontend.yml');
+		expect(result.isOk()).toBe(true);
+		if (result.isOk()) {
+			expect(result.value.prompt).toBe('From custom path.');
+		}
+	});
+
+	it('errors when an explicit config path is missing', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'label-policy-'));
+		tempDirs.push(dir);
+
+		const result = await readLabelPolicy(dir, 'missing.yml');
+		expect(result.isErr()).toBe(true);
+		if (result.isErr()) {
+			expect(result.error).toBeInstanceOf(MissingLabelPolicyFileError);
 		}
 	});
 });

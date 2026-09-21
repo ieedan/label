@@ -7,12 +7,16 @@
 		"name": "Aidan Bleser",
 		"url": "https://github.com/ieedan"
 	},
+	"homepage": "https://github.com/ieedan/label",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/ieedan/label"
 	},
 	"bugs": {
 		"url": "https://github.com/ieedan/label/issues"
+	},
+	"publishConfig": {
+		"access": "public"
 	},
 	"keywords": [
 		"cli",

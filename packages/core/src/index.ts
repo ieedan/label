@@ -8,6 +8,7 @@ export {
 	InvalidTopCountError,
 	LabelError,
 	MissingGitHubTokenError,
+	MissingLabelPolicyFileError,
 	MissingTypeSafeApiKeyError,
 	NoIssueNumbersError,
 	NoIssuesFoundError,
@@ -16,6 +17,7 @@ export {
 	WrongItemKindError,
 } from './errors';
 export type {
+	AuthorRole,
 	GitHubRepo,
 	IssueSelection,
 	ItemComment,
@@ -25,6 +27,7 @@ export type {
 	SimilarItem,
 } from './github';
 export {
+	AUTHOR_ROLES,
 	addIssueLabels,
 	DEFAULT_TOP_ISSUES,
 	getIssue,
@@ -34,6 +37,7 @@ export {
 	listItemConversation,
 	listRepoLabels,
 	matchesItemKind,
+	parseAuthorRole,
 	parseGitHubPayload,
 	parseIssueNumbers,
 	parseRepo,

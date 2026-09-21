@@ -130,16 +130,27 @@ export class TypeSafeRequestError extends LabelError {
 }
 
 export class InvalidLabelPolicyError extends LabelError {
-	constructor(detail: string) {
-		super(`Invalid .label.yml: ${detail}`, {
+	readonly detail: string;
+
+	constructor(detail: string, filePath = '.label.yml') {
+		super(`Invalid ${pc.bold(filePath)}: ${detail}`, {
 			suggestion: 'Check the YAML syntax and label entries, then try again.',
+		});
+		this.detail = detail;
+	}
+}
+
+export class MissingLabelPolicyFileError extends LabelError {
+	constructor(filePath: string) {
+		super(`Label policy not found: ${pc.bold(filePath)}.`, {
+			suggestion: 'Pass a path that exists, or omit --config to use .label.yml.',
 		});
 	}
 }
 
 export class UnknownPolicyLabelError extends LabelError {
-	constructor(name: string) {
-		super(`Unknown label ${pc.bold(name)} in .label.yml.`, {
+	constructor(name: string, filePath = '.label.yml') {
+		super(`Unknown label ${pc.bold(name)} in ${pc.bold(filePath)}.`, {
 			suggestion: 'Use a label that exists on the GitHub repository, or create it first.',
 		});
 	}

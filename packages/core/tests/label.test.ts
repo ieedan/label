@@ -158,7 +158,7 @@ describe('labelIssues', () => {
 		expect(requests.some((request) => request.startsWith('POST'))).toBe(false);
 	});
 
-	it('sends policy overlay and --prompt to Jev', async () => {
+	it('sends config prompt and --prompt to Jev', async () => {
 		const result = await labelIssues({
 			repo: 'ieedan/label',
 			numbers: ['1'],
@@ -166,7 +166,7 @@ describe('labelIssues', () => {
 			token: 'test-token',
 			prompt: 'Do not apply enhancement.',
 			policy: {
-				policy: 'Prefer specific labels.',
+				prompt: 'Prefer specific labels.',
 				labels: {
 					bug: { applyWhen: 'Reproducible crash.' },
 				},
@@ -185,8 +185,7 @@ describe('labelIssues', () => {
 			},
 			ask: async ({ state }) => {
 				expect(state).toMatchObject({
-					policy: 'Prefer specific labels.',
-					prompt: 'Do not apply enhancement.',
+					prompt: 'Prefer specific labels.\n\nDo not apply enhancement.',
 					labels: [
 						{ name: 'bug', apply_when: 'Reproducible crash.' },
 						{ name: 'enhancement' },
@@ -339,6 +338,7 @@ describe('labelIssues', () => {
 		const result = await labelIssues({
 			repo: 'ieedan/label',
 			numbers: ['1'],
+			remove: true,
 			token: 'test-token',
 			fetch: async (input, init) => {
 				const url = String(input);
@@ -380,13 +380,12 @@ describe('labelIssues', () => {
 		).toBe(true);
 	});
 
-	it('does not DELETE labels when remove is false', async () => {
+	it('does not DELETE labels unless remove is true', async () => {
 		const methods: string[] = [];
 
 		const result = await labelIssues({
 			repo: 'ieedan/label',
 			numbers: ['1'],
-			remove: false,
 			token: 'test-token',
 			fetch: async (input, init) => {
 				const url = String(input);
@@ -637,12 +636,19 @@ describe('labelIssues', () => {
 					return Response.json(labels);
 				}
 				if (url.endsWith('/issues/1')) {
-					return Response.json({ number: 1, title: 'Crash', body: 'It crashes' });
+					return Response.json({
+						number: 1,
+						title: 'Crash',
+						body: 'It crashes',
+						user: { login: 'octocat' },
+						author_association: 'NONE',
+					});
 				}
 				if (url.includes('/issues/1/comments')) {
 					return Response.json([
 						{
 							user: { login: 'octocat' },
+							author_association: 'NONE',
 							body: 'I can reproduce this on main.',
 							created_at: '2026-01-02T00:00:00Z',
 						},
@@ -654,12 +660,15 @@ describe('labelIssues', () => {
 						title: 'Dark mode',
 						body: 'Theme',
 						pull_request: {},
+						user: { login: 'ieedan' },
+						author_association: 'OWNER',
 					});
 				}
 				if (url.includes('/issues/2/comments')) {
 					return Response.json([
 						{
 							user: { login: 'ieedan' },
+							author_association: 'OWNER',
 							body: 'Please add a screenshot.',
 							created_at: '2026-01-01T00:00:00Z',
 						},
@@ -669,6 +678,7 @@ describe('labelIssues', () => {
 					return Response.json([
 						{
 							user: { login: 'reviewer' },
+							author_association: 'MEMBER',
 							body: 'The contrast on the toggle is too low.',
 							created_at: '2026-01-03T00:00:00Z',
 						},
@@ -678,6 +688,7 @@ describe('labelIssues', () => {
 					return Response.json([
 						{
 							user: { login: 'reviewer' },
+							author_association: 'COLLABORATOR',
 							body: 'Looks good after the contrast fix.',
 							state: 'APPROVED',
 							created_at: '2026-01-04T00:00:00Z',
@@ -691,9 +702,12 @@ describe('labelIssues', () => {
 					items: [
 						{
 							number: 1,
+							author: 'octocat',
+							authorRole: 'NONE',
 							comments: [
 								{
 									author: 'octocat',
+									role: 'NONE',
 									body: 'I can reproduce this on main.',
 									kind: 'comment',
 								},
@@ -701,19 +715,24 @@ describe('labelIssues', () => {
 						},
 						{
 							number: 2,
+							author: 'ieedan',
+							authorRole: 'OWNER',
 							comments: [
 								{
 									author: 'ieedan',
+									role: 'OWNER',
 									body: 'Please add a screenshot.',
 									kind: 'comment',
 								},
 								{
 									author: 'reviewer',
+									role: 'MEMBER',
 									body: 'The contrast on the toggle is too low.',
 									kind: 'review_comment',
 								},
 								{
 									author: 'reviewer',
+									role: 'COLLABORATOR',
 									body: 'Looks good after the contrast fix.',
 									kind: 'review',
 								},

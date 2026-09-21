@@ -1,0 +1,38 @@
+# Copy to .label.yml at the repository root.
+#
+# Overlay for GitHub labels. Unlisted labels still apply from name and
+# description unless only_configured is true.
+
+prompt: Prefer specific labels over generic ones.
+
+# only_configured: true
+
+labels:
+  accessibility:
+    apply_when: Barrier affecting people with disabilities
+  bug:
+    apply_when: Something isn't working
+    remove_when: The report is a feature request, not a defect
+    examples:
+      - Crash when a required token is missing
+      - Labels are applied to the wrong issue
+    threshold: 0.7
+  documentation:
+    apply_when: Improvements or additions to documentation
+  duplicate:
+    context: similar_issues
+    apply_when: This issue or pull request already exists
+  enhancement:
+    apply_when: New feature or request
+  good first issue:
+    apply_when: Good for newcomers
+    can_apply: false
+  help wanted:
+    apply_when: Extra attention is needed
+  invalid:
+    apply_when: This doesn't seem right
+  question:
+    apply_when: Further information is requested
+  wontfix:
+    apply_when: This will not be worked on
+    can_remove: false

@@ -4,7 +4,11 @@ import path from 'node:path';
 import { err, ok, type Result } from 'nevereverthrow';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
-import { InvalidLabelPolicyError, UnknownPolicyLabelError } from './errors';
+import {
+	InvalidLabelPolicyError,
+	MissingLabelPolicyFileError,
+	UnknownPolicyLabelError,
+} from './errors';
 import type { RepoLabel } from './github';
 
 export const LABEL_POLICY_FILENAMES = ['.label.yml', '.label.yaml'] as const;
@@ -25,7 +29,7 @@ export type LabelPolicyEntry = {
 };
 
 export type LabelPolicy = {
-	policy?: string;
+	prompt?: string;
 	onlyConfigured?: boolean;
 	labels: Record<string, LabelPolicyEntry>;
 };
@@ -55,7 +59,7 @@ const labelPolicyEntrySchema = z.object({
 });
 
 const labelPolicySchema = z.object({
-	policy: z.string().optional(),
+	prompt: z.string().optional(),
 	only_configured: z.boolean().optional(),
 	labels: z.record(z.string(), labelPolicyEntrySchema).optional(),
 });
@@ -96,7 +100,7 @@ export function parseLabelPolicy(content: string): Result<LabelPolicy, InvalidLa
 	}
 
 	return ok({
-		policy: emptyToUndefined(parsed.data.policy),
+		prompt: emptyToUndefined(parsed.data.prompt),
 		onlyConfigured: parsed.data.only_configured,
 		labels,
 	});
@@ -118,13 +122,22 @@ export function findLabelPolicyFile(cwd: string): string | undefined {
 }
 
 export async function readLabelPolicy(
-	cwd: string
-): Promise<Result<LabelPolicy, InvalidLabelPolicyError>> {
-	const filePath = findLabelPolicyFile(cwd);
+	cwd: string,
+	config?: string
+): Promise<Result<LabelPolicy, InvalidLabelPolicyError | MissingLabelPolicyFileError>> {
+	const filePath = config ? path.resolve(cwd, config) : findLabelPolicyFile(cwd);
 	if (!filePath) return ok({ labels: {} });
 
+	if (config && !existsSync(filePath)) {
+		return err(new MissingLabelPolicyFileError(filePath));
+	}
+
 	const content = await readFile(filePath, 'utf8');
-	return parseLabelPolicy(content);
+	const parsed = parseLabelPolicy(content);
+	if (parsed.isErr()) {
+		return err(new InvalidLabelPolicyError(parsed.error.detail, filePath));
+	}
+	return parsed;
 }
 
 export function mergeLabelPolicy(

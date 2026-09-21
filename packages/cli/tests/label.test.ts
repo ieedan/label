@@ -9,7 +9,7 @@ describe('cli', () => {
 		expect(cli.commands.map((command) => command.name())).toContain('label');
 	});
 
-	it('registers all, top, include-closed, issues, prs, with-confidence, prompt, and no-remove options', () => {
+	it('registers all, top, include-closed, issues, prs, with-confidence, prompt, remove, and config options', () => {
 		const command = cli.commands.find((entry) => entry.name() === 'label');
 		const flags = command?.options.map((option) => option.long) ?? [];
 		expect(flags).toEqual(
@@ -21,7 +21,8 @@ describe('cli', () => {
 				'--prs',
 				'--with-confidence',
 				'--prompt',
-				'--no-remove',
+				'--remove',
+				'--config',
 			])
 		);
 	});
@@ -233,11 +234,46 @@ describe('formatDecisions', () => {
 					chosen: ['bug'],
 				},
 			],
-			{ columns: 120 }
+			{ columns: 120, remove: true }
 		);
 		expect(table).toContain('bug');
 		expect(table).toContain('enhancement (remove)');
 		expect(table).toContain('0.10');
+	});
+
+	it('does not mark labels for removal unless remove is true', () => {
+		const table = formatDecisions(
+			[
+				{
+					...decisions[0]!,
+					item: { ...decisions[0]!.item, currentLabels: ['enhancement'] },
+					labels: [
+						{
+							name: 'bug',
+							description: null,
+							noul: 0.91,
+							threshold: 0.6,
+							apply: true,
+							canApply: true,
+							canRemove: true,
+						},
+						{
+							name: 'enhancement',
+							description: null,
+							noul: 0.1,
+							threshold: 0.6,
+							apply: false,
+							canApply: true,
+							canRemove: true,
+						},
+					],
+					chosen: ['bug'],
+				},
+			],
+			{ columns: 120 }
+		);
+		expect(table).toContain('bug');
+		expect(table).not.toContain('enhancement (remove)');
 	});
 
 	it('keeps table rows within the terminal width', () => {

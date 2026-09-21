@@ -25,7 +25,7 @@ Do not create labels. Do not add `label-recent.yml`, cron, or `--top`/`--all` jo
 
 ## `.label.yml`
 
-For every GitHub label, add an entry whose `apply_when` is that label's description. Omit `apply_when` when the description is empty. Do not invent `remove_when`, `examples`, `threshold`, `can_apply`, `can_remove`, `context`, or a top-level `policy`.
+For every GitHub label, add an entry whose `apply_when` is that label's description. Omit `apply_when` when the description is empty. Do not invent `remove_when`, `examples`, `threshold`, `can_apply`, `can_remove`, `context`, or a top-level `prompt`.
 
 Quote YAML keys that are not plain identifiers (e.g. `good first issue`).
 
@@ -94,7 +94,7 @@ jobs:
 
 ## Optional policy fields (only if asked)
 
-- `policy`: repo-wide steering
+- `prompt`: repo-wide steering (same as `--prompt`)
 - `remove_when`: when the label should come off
 - `examples`: typical matches
 - `threshold`: min noul to apply (default 0.7)

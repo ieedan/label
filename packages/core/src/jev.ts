@@ -27,7 +27,6 @@ export type LabelDecision = {
 };
 
 export type AskContext = {
-	policy?: string;
 	prompt?: string;
 };
 
@@ -47,6 +46,7 @@ export function itemState(item: LabelItem) {
 		title: item.title,
 		body: item.body ?? '',
 		author: item.author ?? null,
+		authorRole: item.authorRole ?? null,
 		comments: item.comments ?? [],
 	};
 }
@@ -68,7 +68,6 @@ export function buildRequest(
 	context: AskContext = {}
 ) {
 	const state = {
-		policy: context.policy ?? null,
 		prompt: context.prompt ?? null,
 		items: items.map(itemState),
 		labels: labels.map(labelState),
@@ -82,7 +81,7 @@ export function buildRequest(
 			questions[questionId(itemIndex, labelIndex)] = noul(
 				{
 					question: `Should the GitHub label at \`${labelPath}\` be applied to \`${itemPath}\`?`,
-					judge_from: `\`${itemPath}.title\`, \`${itemPath}.body\`, and \`${itemPath}.comments\` (the discussion between users). \`${itemPath}.type\` is issue or pull_request. Honor \`policy\` when present (repo labeling rules) and \`prompt\` when present (extra instructions for this run).`,
+					judge_from: `\`${itemPath}.title\`, \`${itemPath}.body\`, \`${itemPath}.authorRole\`, and \`${itemPath}.comments\` (discussion; each comment's \`role\` is the author's GitHub author_association: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, MANNEQUIN, or NONE). \`${itemPath}.type\` is issue or pull_request. Honor \`prompt\` when present.`,
 					label: `Use \`${labelPath}.name\` and \`${labelPath}.description\` as the meaning of the label. If \`${labelPath}.apply_when\` is present, require a match. If \`${labelPath}.remove_when\` is present, do not apply when it matches; remove the label if it is already on the item. If \`${labelPath}.examples\` is present, treat them as typical matches.`,
 				},
 				{
@@ -116,7 +115,6 @@ export function buildContextRequest(
 	context: AskContext = {}
 ) {
 	const state = {
-		policy: context.policy ?? null,
 		prompt: context.prompt ?? null,
 		items: items.map(({ item, candidates }) => ({
 			...itemState(item),
@@ -133,7 +131,7 @@ export function buildContextRequest(
 			questions[questionId(itemIndex, labelIndex)] = noul(
 				{
 					question: `Should the GitHub label at \`${labelPath}\` be applied to \`${itemPath}\`?`,
-					judge_from: `\`${itemPath}.title\`, \`${itemPath}.body\`, \`${itemPath}.comments\`, and \`${itemPath}.candidates\` (other issues or pull requests that may already cover this report). \`${itemPath}.type\` is issue or pull_request. Honor \`policy\` when present (repo labeling rules) and \`prompt\` when present (extra instructions for this run).`,
+					judge_from: `\`${itemPath}.title\`, \`${itemPath}.body\`, \`${itemPath}.authorRole\`, \`${itemPath}.comments\` (each comment's \`role\` is the author's GitHub author_association: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, MANNEQUIN, or NONE), and \`${itemPath}.candidates\` (other issues or pull requests that may already cover this report). \`${itemPath}.type\` is issue or pull_request. Honor \`prompt\` when present.`,
 					label: `Use \`${labelPath}.name\` and \`${labelPath}.description\` as the meaning of the label. If \`${labelPath}.apply_when\` is present, require a match. If \`${labelPath}.remove_when\` is present, do not apply when it matches; remove the label if it is already on the item. If \`${labelPath}.examples\` is present, treat them as typical matches. Apply when comments already identify a matching existing item, or when a candidate is the same report (or otherwise matches the label). If \`${itemPath}.candidates\` is empty, rely on the item and its comments only.`,
 				},
 				{
@@ -243,7 +241,6 @@ export async function askLabels(
 	labels: LabelDefinition[],
 	options: {
 		threshold: number;
-		policy?: string;
 		prompt?: string;
 		client?: TypeSafeClient;
 		ask?: AskSystemOne;
@@ -257,7 +254,7 @@ export async function askLabels(
 	const askResult = resolveAsk(options);
 	if (askResult.isErr()) return err(askResult.error);
 	const ask = askResult.value;
-	const context = { policy: options.policy, prompt: options.prompt };
+	const context = { prompt: options.prompt };
 
 	const chunks = chunkItems(items, labels, context);
 	try {
@@ -279,7 +276,6 @@ export async function askContextLabels(
 	labels: LabelDefinition[],
 	options: {
 		threshold: number;
-		policy?: string;
 		prompt?: string;
 		client?: TypeSafeClient;
 		ask?: AskSystemOne;
@@ -293,7 +289,7 @@ export async function askContextLabels(
 	const askResult = resolveAsk(options);
 	if (askResult.isErr()) return err(askResult.error);
 	const ask = askResult.value;
-	const context = { policy: options.policy, prompt: options.prompt };
+	const context = { prompt: options.prompt };
 
 	const chunks = chunkContextItems(items, labels, context);
 	try {

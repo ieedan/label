@@ -44,13 +44,13 @@ describe('buildRequest', () => {
 		]);
 		expect(questions[questionId(1, 0)]?.instructions).toMatchObject({
 			question: expect.stringContaining('`items[1]`'),
-			judge_from: expect.stringContaining('comments'),
+			judge_from: expect.stringContaining('authorRole'),
 		});
-		expect(state.items[0]).toMatchObject({ comments: [] });
-		expect(state).toMatchObject({ policy: null, prompt: null });
+		expect(state.items[0]).toMatchObject({ comments: [], authorRole: null });
+		expect(state).toMatchObject({ prompt: null });
 	});
 
-	it('includes policy overlay and prompt in state', () => {
+	it('includes prompt in state', () => {
 		const { state, questions } = buildRequest(
 			[item(1)],
 			[
@@ -62,12 +62,11 @@ describe('buildRequest', () => {
 					examples: ['Crash when input is empty'],
 				},
 			],
-			{ policy: 'Prefer specific labels.', prompt: 'Do not apply enhancement.' }
+			{ prompt: 'Prefer specific labels.' }
 		);
 
 		expect(state).toMatchObject({
-			policy: 'Prefer specific labels.',
-			prompt: 'Do not apply enhancement.',
+			prompt: 'Prefer specific labels.',
 			labels: [
 				{
 					name: 'bug',

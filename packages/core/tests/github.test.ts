@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	DEFAULT_TOP_ISSUES,
+	parseAuthorRole,
 	parseGitHubPayload,
 	parseIssueNumbers,
 	parseRepo,
@@ -120,6 +121,7 @@ describe('parseGitHubPayload', () => {
 				body: 'It blows up.',
 				html_url: 'https://github.com/ieedan/label/issues/12',
 				user: { login: 'ieedan' },
+				author_association: 'OWNER',
 				labels: [{ name: 'bug' }],
 			},
 			repository: { full_name: 'ieedan/label' },
@@ -133,6 +135,7 @@ describe('parseGitHubPayload', () => {
 				title: 'Crash on empty input',
 				body: 'It blows up.',
 				author: 'ieedan',
+				authorRole: 'OWNER',
 				currentLabels: ['bug'],
 				repository: 'ieedan/label',
 			});
@@ -182,6 +185,7 @@ describe('parseGitHubPayload', () => {
 			conversation: [
 				{
 					author: 'octocat',
+					author_association: 'CONTRIBUTOR',
 					body: 'I can reproduce this.',
 					createdAt: '2026-01-01T00:00:00Z',
 					kind: 'comment',
@@ -194,12 +198,23 @@ describe('parseGitHubPayload', () => {
 			expect(result.value.comments).toEqual([
 				{
 					author: 'octocat',
+					role: 'CONTRIBUTOR',
 					body: 'I can reproduce this.',
 					createdAt: '2026-01-01T00:00:00Z',
 					kind: 'comment',
 				},
 			]);
 		}
+	});
+});
+
+describe('parseAuthorRole', () => {
+	it('maps GitHub author_association values', () => {
+		expect(parseAuthorRole('OWNER')).toBe('OWNER');
+		expect(parseAuthorRole('FIRST_TIME_CONTRIBUTOR')).toBe('FIRST_TIME_CONTRIBUTOR');
+		expect(parseAuthorRole('collaborator')).toBe('COLLABORATOR');
+		expect(parseAuthorRole('not-a-role')).toBeNull();
+		expect(parseAuthorRole(undefined)).toBeNull();
 	});
 });
 

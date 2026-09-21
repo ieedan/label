@@ -17,8 +17,22 @@ export type RepoLabel = {
 	color?: string;
 };
 
+export const AUTHOR_ROLES = [
+	'OWNER',
+	'MEMBER',
+	'COLLABORATOR',
+	'CONTRIBUTOR',
+	'FIRST_TIME_CONTRIBUTOR',
+	'FIRST_TIMER',
+	'MANNEQUIN',
+	'NONE',
+] as const;
+
+export type AuthorRole = (typeof AUTHOR_ROLES)[number];
+
 export type ItemComment = {
 	author: string | null;
+	role: AuthorRole | null;
 	body: string;
 	createdAt: string | null;
 	kind: 'comment' | 'review' | 'review_comment';
@@ -31,6 +45,7 @@ export type LabelItem = {
 	body: string | null;
 	url?: string;
 	author?: string;
+	authorRole?: AuthorRole | null;
 	currentLabels: string[];
 	repository?: string;
 	comments: ItemComment[];
@@ -101,6 +116,7 @@ const gitHubItemSchema = z
 		body: z.string().nullable().optional(),
 		html_url: z.string().optional(),
 		user: gitHubUserSchema.nullable().optional(),
+		author_association: z.string().nullable().optional(),
 		labels: z.array(labelRefSchema).optional(),
 		pull_request: z.unknown().optional(),
 	})
@@ -117,6 +133,8 @@ const gitHubRepositorySchema = z
 const conversationCommentSchema = z
 	.object({
 		author: z.string().nullable().optional(),
+		role: z.string().nullable().optional(),
+		author_association: z.string().nullable().optional(),
 		body: z.string(),
 		createdAt: z.string().nullable().optional(),
 		kind: z.enum(['comment', 'review', 'review_comment']).optional(),
@@ -288,6 +306,7 @@ function repositoryName(
 function toStoredComment(comment: z.infer<typeof conversationCommentSchema>): ItemComment {
 	return {
 		author: comment.author ?? null,
+		role: parseAuthorRole(comment.role ?? comment.author_association),
 		body: comment.body,
 		createdAt: comment.createdAt ?? null,
 		kind: comment.kind ?? 'comment',
@@ -307,6 +326,7 @@ function toLabelItem(
 		body: raw.body ?? null,
 		url: raw.html_url,
 		author: raw.user?.login,
+		authorRole: parseAuthorRole(raw.author_association),
 		currentLabels: (raw.labels ?? []).map((label) =>
 			typeof label === 'string' ? label : label.name
 		),
@@ -523,9 +543,18 @@ export async function listItemConversation(
 
 type GitHubComment = {
 	user?: { login?: string } | null;
+	author_association?: string | null;
 	body?: string | null;
 	created_at?: string;
 };
+
+export function parseAuthorRole(value: unknown): AuthorRole | null {
+	if (typeof value !== 'string') return null;
+	const normalized = value.trim().toUpperCase().replace(/-/g, '_');
+	return (AUTHOR_ROLES as readonly string[]).includes(normalized)
+		? (normalized as AuthorRole)
+		: null;
+}
 
 type GitHubReview = GitHubComment & {
 	state?: string;
@@ -536,6 +565,7 @@ function toFetchedComment(raw: GitHubComment, kind: ItemComment['kind']): ItemCo
 	if (body.length === 0) return null;
 	return {
 		author: raw.user?.login ?? null,
+		role: parseAuthorRole(raw.author_association),
 		body,
 		createdAt: raw.created_at ?? null,
 		kind,

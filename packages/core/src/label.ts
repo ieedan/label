@@ -42,7 +42,6 @@ export type LabelOptions = {
 	payload: unknown | unknown[];
 	labels: LabelDefinition[];
 	threshold?: number;
-	policy?: string;
 	prompt?: string;
 	client?: TypeSafeClient;
 	ask?: AskSystemOne;
@@ -70,6 +69,7 @@ export type LabelIssuesOptions = {
 	policy?: LabelPolicy;
 	prompt?: string;
 	cwd?: string;
+	config?: string;
 	client?: TypeSafeClient;
 	ask?: AskSystemOne;
 	fetch?: typeof fetch;
@@ -93,7 +93,6 @@ export async function label(options: LabelOptions): Promise<Result<LabelResult, 
 
 	const askOptions = {
 		threshold: options.threshold ?? DEFAULT_LABEL_THRESHOLD,
-		policy: options.policy,
 		prompt: options.prompt,
 		client: options.client,
 		ask: options.ask,
@@ -154,8 +153,8 @@ export async function labelIssues(
 	const policyResult =
 		options.policy !== undefined
 			? ok(options.policy)
-			: options.cwd
-				? await readLabelPolicy(options.cwd)
+			: options.config || options.cwd
+				? await readLabelPolicy(options.cwd ?? '.', options.config)
 				: ok(emptyPolicy);
 	if (policyResult.isErr()) return err(policyResult.error);
 
@@ -173,8 +172,7 @@ export async function labelIssues(
 		payload: payloadsResult.value,
 		labels: mergedLabels.value,
 		threshold: options.threshold,
-		policy: policyResult.value.policy,
-		prompt: options.prompt,
+		prompt: joinPrompts(policyResult.value.prompt, options.prompt),
 		client: options.client,
 		ask: options.ask,
 		repo,
@@ -184,7 +182,7 @@ export async function labelIssues(
 	if (labeled.isErr()) return err(labeled.error);
 
 	const dryRun = options.dryRun ?? false;
-	const remove = options.remove ?? true;
+	const remove = options.remove ?? false;
 	if (!dryRun) {
 		const applied = await Promise.all(
 			labeled.value.decisions.map((decision) =>
@@ -331,4 +329,12 @@ function resolveSearchRepo(
 	if (!raw) return undefined;
 	const parsed = parseRepo(raw);
 	return parsed.isOk() ? parsed.value : undefined;
+}
+
+function joinPrompts(...parts: (string | undefined)[]): string | undefined {
+	const merged = parts
+		.map((part) => part?.trim())
+		.filter((part): part is string => Boolean(part))
+		.join('\n\n');
+	return merged.length > 0 ? merged : undefined;
 }

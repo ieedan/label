@@ -11,13 +11,13 @@ const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
 
 export function formatDecisions(
 	decisions: LabelDecision[],
-	options: { columns?: number } = {}
+	options: { columns?: number; remove?: boolean } = {}
 ): string {
 	const header = ['#', 'Title', 'Labels'].map((cell) => pc.bold(cell));
 	const rows = decisions.map((decision) => [
 		`#${decision.item.number}`,
 		pc.bold(truncate(decision.item.title, TITLE_MAX)),
-		formatLabels(decision),
+		formatLabels(decision, options.remove ?? false),
 	]);
 
 	return formatTable([header, ...rows], options.columns ?? process.stdout.columns ?? 80);
@@ -87,8 +87,10 @@ function wrapTokens(tokens: string[], width: number): string[] {
 	return lines.length > 0 ? lines : ['—'];
 }
 
-function formatLabels(decision: LabelDecision): string {
-	const removed = new Set(labelsToRemove(decision).map((name) => name.toLowerCase()));
+function formatLabels(decision: LabelDecision, remove: boolean): string {
+	const removed = new Set(
+		remove ? labelsToRemove(decision).map((name) => name.toLowerCase()) : []
+	);
 	const shown = decision.labels.filter(
 		(label) => label.apply || removed.has(label.name.toLowerCase())
 	);

@@ -26,6 +26,7 @@ export const schema = defaultCommandOptionsSchema.extend({
 	prs: z.boolean(),
 	withConfidence: z.boolean(),
 	prompt: z.string().optional(),
+	config: z.string().optional(),
 });
 
 export type LabelOptions = z.infer<typeof schema>;
@@ -35,7 +36,7 @@ export const label = new Command('label')
 	.argument('[numbers...]', 'Issue or pull request numbers.')
 	.requiredOption('-R, --repo <owner/name>', 'GitHub repository.')
 	.option('--dry-run', 'Do not apply or remove labels; print decisions only.', false)
-	.option('--no-remove', 'Do not remove labels that no longer apply.')
+	.option('--remove', 'Remove labels that no longer apply.', false)
 	.option('--all', 'Label every matching issue and pull request.', false)
 	.option(
 		'--top [n]',
@@ -45,7 +46,11 @@ export const label = new Command('label')
 	.option('--issues', 'Limit to issues (exclude pull requests).', false)
 	.option('--prs', 'Limit to pull requests (exclude issues).', false)
 	.option('--with-confidence', 'Accepted for compatibility; confidence is always shown.', false)
-	.option('--prompt <text>', 'Extra instructions for Jev for this run.')
+	.option('--prompt <text>', 'Instructions for Jev. Combined with prompt from the config file.')
+	.option(
+		'-c, --config <path>',
+		'Path to the label policy file (default: .label.yml or .label.yaml).'
+	)
 	.option(
 		'--threshold <n>',
 		'Minimum noul probability to apply a label.',
@@ -64,7 +69,9 @@ export const label = new Command('label')
 		const result = await tryCommand(runLabel(numbers, options));
 		spinner.stop(result.dryRun ? 'Dry run. No labels were changed.' : 'Updated labels.');
 
-		process.stdout.write(`\n${formatDecisions(result.decisions)}\n\n`);
+		process.stdout.write(
+			`\n${formatDecisions(result.decisions, { remove: options.remove })}\n\n`
+		);
 
 		outro(
 			result.dryRun
@@ -90,5 +97,6 @@ export async function runLabel(
 		threshold: options.threshold,
 		prompt: options.prompt,
 		cwd: options.cwd,
+		config: options.config,
 	});
 }
