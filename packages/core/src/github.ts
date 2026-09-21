@@ -155,20 +155,63 @@ export function githubToken(env: NodeJS.Dict<string> = process.env): string | un
 	return env.GITHUB_TOKEN ?? env.GH_TOKEN;
 }
 
+const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+/** `git@github.com:owner/name.git` and other scp-like remote URLs. */
+const SCP_LIKE = /^(?:[^@/]+@)?([^/:]+):(.+)$/;
+
+/**
+ * Parses a repository reference into its owner and name.
+ *
+ * Accepts `owner/name` as well as the remote URL formats git writes, for example
+ * `https://github.com/owner/name.git` and `git@github.com:owner/name.git`.
+ */
 export function parseRepo(repo: string): Result<GitHubRepo, InvalidRepoError> {
 	const trimmed = repo
 		.trim()
-		.replace(/\/+$/, '')
-		.replace(/\.git$/, '');
-	const withoutProtocol = trimmed.replace(/^https?:\/\//, '');
-	const withoutHost = withoutProtocol.replace(/^(www\.)?github\.com\//, '');
-	const [owner, name] = withoutHost.split('/');
+		.replace(/^git\+/, '')
+		.replace(/\/+$/, '');
 
-	if (!owner || !name || withoutHost.split('/').length !== 2) {
+	let host: string | undefined;
+	let path = trimmed;
+
+	const scheme = SCHEME.exec(trimmed);
+	if (scheme) {
+		const withoutScheme = trimmed.slice(scheme[0].length).replace(/^[^@/]*@/, '');
+		const separator = withoutScheme.indexOf('/');
+		if (separator === -1) return err(new InvalidRepoError(repo));
+		host = withoutScheme.slice(0, separator);
+		path = withoutScheme.slice(separator + 1);
+	} else {
+		const scp = SCP_LIKE.exec(trimmed);
+		if (scp?.[1] !== undefined && scp[2] !== undefined) {
+			host = scp[1];
+			path = scp[2];
+		}
+	}
+
+	if (host !== undefined && normalizeHost(host) !== 'github.com') {
+		return err(new InvalidRepoError(repo));
+	}
+
+	const segments = path
+		.replace(/\.git$/i, '')
+		.replace(/^\/+/, '')
+		.replace(/\/+$/, '')
+		.split('/');
+	const [owner, name] = segments;
+
+	if (!owner || !name || segments.length !== 2) {
 		return err(new InvalidRepoError(repo));
 	}
 
 	return ok({ owner, name });
+}
+
+function normalizeHost(host: string): string {
+	return host
+		.toLowerCase()
+		.replace(/:\d+$/, '')
+		.replace(/^www\./, '');
 }
 
 export function parseIssueNumbers(

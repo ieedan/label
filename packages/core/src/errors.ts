@@ -38,6 +38,15 @@ export class InvalidRepoError extends LabelError {
 	}
 }
 
+export class RepoNotDetectedError extends LabelError {
+	constructor() {
+		super('Could not detect a GitHub repository from the git remotes.', {
+			suggestion:
+				'Run inside a repository with a GitHub remote, or pass the repository with -R owner/name.',
+		});
+	}
+}
+
 export class InvalidIssueNumberError extends LabelError {
 	constructor(value: string) {
 		super(`Invalid issue number: ${pc.bold(value)}.`, {

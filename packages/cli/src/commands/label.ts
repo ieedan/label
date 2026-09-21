@@ -17,7 +17,7 @@ export const schema = defaultCommandOptionsSchema.extend({
 	verbose: z.boolean(),
 	dryRun: z.boolean(),
 	remove: z.boolean(),
-	repo: z.string(),
+	repo: z.string().optional(),
 	threshold: z.coerce.number(),
 	all: z.boolean(),
 	top: z.union([z.boolean(), z.coerce.number()]).optional(),
@@ -34,7 +34,10 @@ export type LabelOptions = z.infer<typeof schema>;
 export const label = new Command('label')
 	.description('Label GitHub issues and pull requests with Jev.')
 	.argument('[numbers...]', 'Issue or pull request numbers.')
-	.requiredOption('-R, --repo <owner/name>', 'GitHub repository.')
+	.option(
+		'-R, --repo <owner/name>',
+		'GitHub repository. Defaults to the GitHub remote of the repository at --cwd.'
+	)
 	.option('--dry-run', 'Do not apply or remove labels; print decisions only.', false)
 	.option('--remove', 'Remove labels that no longer apply.', false)
 	.option('--all', 'Label every matching issue and pull request.', false)
@@ -75,8 +78,8 @@ export const label = new Command('label')
 
 		outro(
 			result.dryRun
-				? `Chose labels for ${result.decisions.length} item(s).`
-				: `Updated ${result.decisions.length} item(s).`
+				? `Chose labels for ${result.decisions.length} item(s) in ${result.repo}.`
+				: `Updated ${result.decisions.length} item(s) in ${result.repo}.`
 		);
 	});
 

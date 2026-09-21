@@ -18,8 +18,11 @@ GITHUB_TOKEN=github_pat_... # you can use the actions one in workflows
 
 Then you can use the CLI to label issues and pull requests. (We recommend using the `--dry-run` flag so you can tune what get's applied)
 
+The repository is detected from the git remote (`origin`, then `upstream`) of the repository you run in, so `-R` is only needed when you want to label a different repository.
+
 ```sh
-npx @ieedan/label label -R ieedan/shadcn-svelte-extras --top 5 # top 5 issues/pulls
+npx @ieedan/label label --top 5 # top 5 issues/pulls in the current repository
+npx @ieedan/label label -R ieedan/shadcn-svelte-extras --top 5 # label a different repository
 npx @ieedan/label label -R ieedan/shadcn-svelte-extras --all --issues # all issues
 npx @ieedan/label label -R ieedan/shadcn-svelte-extras --all --prs # all pulls
 npx @ieedan/label label -R ieedan/shadcn-svelte-extras --prompt "Never apply the 'help wanted' label" # extra steering

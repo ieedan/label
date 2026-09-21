@@ -12,10 +12,19 @@ export {
 	MissingTypeSafeApiKeyError,
 	NoIssueNumbersError,
 	NoIssuesFoundError,
+	RepoNotDetectedError,
 	TypeSafeRequestError,
 	UnknownPolicyLabelError,
 	WrongItemKindError,
 } from './errors';
+export type { GitRemote } from './git';
+export {
+	detectRepo,
+	listGitRemotes,
+	PREFERRED_REMOTES,
+	parseGitRemotes,
+	selectGitHubRemote,
+} from './git';
 export type {
 	AuthorRole,
 	GitHubRepo,

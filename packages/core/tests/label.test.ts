@@ -1,7 +1,14 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { WrongItemKindError } from '../src/errors.js';
+import { RepoNotDetectedError, WrongItemKindError } from '../src/errors.js';
 import { questionId } from '../src/jev.js';
 import { label, labelIssues } from '../src/label.js';
+
+const exec = promisify(execFile);
 
 const labels = [
 	{ name: 'bug', description: 'Something is broken.' },
@@ -108,6 +115,57 @@ describe('label', () => {
 });
 
 describe('labelIssues', () => {
+	it('detects the repository from the git remote when repo is omitted', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'label-detect-'));
+		try {
+			await exec('git', ['init'], { cwd: dir });
+			await exec('git', ['remote', 'add', 'origin', 'git@github.com:ieedan/label.git'], {
+				cwd: dir,
+			});
+
+			const result = await labelIssues({
+				cwd: dir,
+				numbers: ['1'],
+				dryRun: true,
+				token: 'test-token',
+				fetch: async (input) => {
+					const url = String(input);
+					expect(url).toContain('/repos/ieedan/label/');
+					const conversation = emptyConversation(url);
+					if (conversation) return conversation;
+					if (url.includes('/labels')) return Response.json(labels);
+					return Response.json({ number: 1, title: 'Crash', body: 'It crashes' });
+				},
+				ask: async () => ({
+					answers: {
+						[questionId(0, 0)]: { noul: 0.9 },
+						[questionId(0, 1)]: { noul: 0.1 },
+					},
+				}),
+			});
+
+			expect(result.isOk()).toBe(true);
+			if (result.isOk()) {
+				expect(result.value.repo).toBe('ieedan/label');
+			}
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('errors when the repository cannot be detected', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'label-detect-'));
+		try {
+			const result = await labelIssues({ cwd: dir, numbers: ['1'], token: 'test-token' });
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) {
+				expect(result.error).toBeInstanceOf(RepoNotDetectedError);
+			}
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	it('fetches GitHub data, asks Jev once, and skips apply on dry run', async () => {
 		const requests: string[] = [];
 
