@@ -1,6 +1,6 @@
 ---
-'@ieedan/label-core': minor
-'@ieedan/label': minor
+'@ieedan/label-core': patch
+'@ieedan/label': patch
 ---
 
 Detect the repository from the git remote so `-R` is optional
