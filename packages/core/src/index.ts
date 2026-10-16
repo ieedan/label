@@ -27,12 +27,14 @@ export {
 } from './git';
 export type {
 	AuthorRole,
+	ChangedFile,
 	GitHubRepo,
 	IssueSelection,
 	ItemComment,
 	ItemKind,
 	LabelItem,
 	RepoLabel,
+	ReviewThread,
 	SimilarItem,
 } from './github';
 export {
@@ -41,10 +43,14 @@ export {
 	DEFAULT_TOP_ISSUES,
 	getIssue,
 	githubToken,
+	humanRemovedLabels,
 	itemIsPullRequest,
+	listChangedFiles,
+	listHumanRemovedLabels,
 	listIssues,
 	listItemConversation,
 	listRepoLabels,
+	listReviewThreads,
 	matchesItemKind,
 	parseAuthorRole,
 	parseGitHubPayload,

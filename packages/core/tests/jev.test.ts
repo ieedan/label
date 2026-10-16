@@ -78,7 +78,7 @@ describe('buildRequest', () => {
 		});
 		expect(questions[questionId(0, 0)]?.instructions).toMatchObject({
 			judge_from: expect.stringContaining('`prompt`'),
-			label: expect.stringContaining('remove_when'),
+			label: expect.stringContaining('removal condition'),
 		});
 	});
 });
@@ -251,7 +251,7 @@ describe('buildContextRequest', () => {
 		]);
 		expect(questions[questionId(0, 0)]?.instructions).toMatchObject({
 			judge_from: expect.stringContaining('candidates'),
-			label: expect.stringContaining('comments already identify'),
+			label: expect.stringContaining('The same report already exists.'),
 		});
 	});
 });

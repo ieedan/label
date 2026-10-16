@@ -36,6 +36,28 @@ export type ItemComment = {
 	body: string;
 	createdAt: string | null;
 	kind: 'comment' | 'review' | 'review_comment';
+	id?: string;
+	replyToId?: string;
+	reviewState?: string;
+	isBot?: boolean;
+};
+
+export type ReviewThread = {
+	id: string;
+	isResolved: boolean;
+	isOutdated: boolean;
+	resolvedBy: string | null;
+	comments: ItemComment[];
+	commentsOmitted: number;
+};
+
+export type ChangedFile = {
+	filename: string;
+	status: string;
+	additions: number;
+	deletions: number;
+	patch?: string;
+	patchOmitted: boolean;
 };
 
 export type LabelItem = {
@@ -47,8 +69,14 @@ export type LabelItem = {
 	author?: string;
 	authorRole?: AuthorRole | null;
 	currentLabels: string[];
+	/** Labels whose latest human action was removal; used only to veto additions. */
+	humanRemovedLabels?: string[];
 	repository?: string;
 	comments: ItemComment[];
+	reviewThreads?: ReviewThread[];
+	reviewThreadsOmitted?: boolean;
+	files?: ChangedFile[];
+	filesOmitted?: boolean;
 };
 
 export const MAX_CONVERSATION_COMMENTS = 25;
@@ -138,8 +166,21 @@ const conversationCommentSchema = z
 		body: z.string(),
 		createdAt: z.string().nullable().optional(),
 		kind: z.enum(['comment', 'review', 'review_comment']).optional(),
+		id: z.string().optional(),
+		replyToId: z.string().optional(),
+		reviewState: z.string().optional(),
+		isBot: z.boolean().optional(),
 	})
 	.passthrough();
+
+const reviewThreadSchema = z.object({
+	id: z.string(),
+	isResolved: z.boolean(),
+	isOutdated: z.boolean(),
+	resolvedBy: z.string().nullable(),
+	comments: z.array(conversationCommentSchema),
+	commentsOmitted: z.number().int().nonnegative(),
+});
 
 const gitHubWebhookSchema = z
 	.object({
@@ -148,6 +189,22 @@ const gitHubWebhookSchema = z
 		pull_request: gitHubItemSchema.optional(),
 		repository: gitHubRepositorySchema.optional(),
 		conversation: z.array(conversationCommentSchema).optional(),
+		human_removed_labels: z.array(z.string()).optional(),
+		review_threads: z.array(reviewThreadSchema).optional(),
+		review_threads_omitted: z.boolean().optional(),
+		files: z
+			.array(
+				z.object({
+					filename: z.string(),
+					status: z.string(),
+					additions: z.number(),
+					deletions: z.number(),
+					patch: z.string().optional(),
+					patchOmitted: z.boolean(),
+				})
+			)
+			.optional(),
+		files_omitted: z.boolean().optional(),
 	})
 	.passthrough();
 
@@ -317,14 +374,31 @@ export function parseGitHubPayload(
 			: rawItem.pull_request !== undefined
 				? 'pull_request'
 				: 'issue';
-		return ok(
-			toLabelItem(
+		return ok({
+			...(webhook.data.files
+				? { files: webhook.data.files, filesOmitted: webhook.data.files_omitted ?? false }
+				: {}),
+			...toLabelItem(
 				rawItem,
 				type,
 				repositoryName(webhook.data.repository) ?? fallbackRepo,
 				(webhook.data.conversation ?? []).map(toStoredComment)
-			)
-		);
+			),
+			...(webhook.data.human_removed_labels
+				? { humanRemovedLabels: webhook.data.human_removed_labels }
+				: {}),
+			...(webhook.data.review_threads
+				? {
+						reviewThreads: webhook.data.review_threads.map((thread) => ({
+							...thread,
+							comments: thread.comments.map(toStoredComment),
+						})),
+					}
+				: {}),
+			...(webhook.data.review_threads_omitted !== undefined
+				? { reviewThreadsOmitted: webhook.data.review_threads_omitted }
+				: {}),
+		});
 	}
 
 	const item = gitHubItemSchema.safeParse(input);
@@ -353,6 +427,10 @@ function toStoredComment(comment: z.infer<typeof conversationCommentSchema>): It
 		body: comment.body,
 		createdAt: comment.createdAt ?? null,
 		kind: comment.kind ?? 'comment',
+		...(comment.id ? { id: comment.id } : {}),
+		...(comment.replyToId ? { replyToId: comment.replyToId } : {}),
+		...(comment.reviewState ? { reviewState: comment.reviewState } : {}),
+		...(comment.isBot !== undefined ? { isBot: comment.isBot } : {}),
 	};
 }
 
@@ -585,7 +663,9 @@ export async function listItemConversation(
 }
 
 type GitHubComment = {
-	user?: { login?: string } | null;
+	user?: { login?: string; type?: string } | null;
+	id?: number;
+	in_reply_to_id?: number;
 	author_association?: string | null;
 	body?: string | null;
 	created_at?: string;
@@ -601,18 +681,63 @@ export function parseAuthorRole(value: unknown): AuthorRole | null {
 
 type GitHubReview = GitHubComment & {
 	state?: string;
+	submitted_at?: string;
 };
 
 function toFetchedComment(raw: GitHubComment, kind: ItemComment['kind']): ItemComment | null {
 	const body = truncateCommentBody(raw.body ?? '');
-	if (body.length === 0) return null;
+	const reviewState = kind === 'review' ? (raw as GitHubReview).state : undefined;
+	if (body.length === 0 && !reviewState) return null;
 	return {
 		author: raw.user?.login ?? null,
 		role: parseAuthorRole(raw.author_association),
 		body,
-		createdAt: raw.created_at ?? null,
+		createdAt:
+			kind === 'review'
+				? ((raw as GitHubReview).submitted_at ?? raw.created_at ?? null)
+				: (raw.created_at ?? null),
 		kind,
+		isBot: raw.user?.type === 'Bot' || (raw.user?.login?.endsWith('[bot]') ?? false),
+		...(raw.id !== undefined ? { id: String(raw.id) } : {}),
+		...(raw.in_reply_to_id !== undefined ? { replyToId: String(raw.in_reply_to_id) } : {}),
+		...(reviewState ? { reviewState } : {}),
 	};
+}
+
+type LabelEvent = {
+	id?: number;
+	event?: string;
+	label?: { name?: string };
+	actor?: { type?: string } | null;
+	created_at?: string;
+};
+
+/** Later human additions lift the veto; bot actions never override a human removal. */
+export function humanRemovedLabels(events: LabelEvent[]): string[] {
+	const removed = new Map<string, string>();
+	const chronological = [...events].sort(
+		(a, b) =>
+			(a.created_at ?? '').localeCompare(b.created_at ?? '') || (a.id ?? 0) - (b.id ?? 0)
+	);
+	for (const event of chronological) {
+		if (event.actor?.type !== 'User' || !event.label?.name) continue;
+		const name = event.label.name;
+		if (event.event === 'unlabeled') removed.set(name.toLowerCase(), name);
+		else if (event.event === 'labeled') removed.delete(name.toLowerCase());
+	}
+	return [...removed.values()];
+}
+
+export async function listHumanRemovedLabels(
+	repo: GitHubRepo,
+	number: number,
+	options: GitHubClientOptions = {}
+): Promise<Result<string[], GitHubApiError | MissingGitHubTokenError>> {
+	const events = await listPaginated<LabelEvent>(
+		`/repos/${repo.owner}/${repo.name}/issues/${number}/events`,
+		options
+	);
+	return events.isErr() ? err(events.error) : ok(humanRemovedLabels(events.value));
 }
 
 function truncateCommentBody(body: string): string {
@@ -736,4 +861,161 @@ async function githubJson<T>(
 	}
 
 	return ok((text.length === 0 ? undefined : JSON.parse(text)) as T);
+}
+
+/** Bound thread context: the latest 20 threads, their root request and latest 3 replies. */
+export const REVIEW_THREADS_QUERY = `query ReviewContext($owner:String!,$name:String!,$number:Int!) {
+ repository(owner:$owner,name:$name) { pullRequest(number:$number) {
+  reviewThreads(last:20) { pageInfo { hasPreviousPage } nodes {
+   id isResolved isOutdated resolvedBy { login }
+   root:comments(first:1) { nodes { ...ThreadComment } }
+   recent:comments(last:3) { totalCount nodes { ...ThreadComment } }
+  } }
+ } }
+}
+fragment ThreadComment on PullRequestReviewComment {
+ id body createdAt authorAssociation author { login __typename }
+ replyTo { id } pullRequestReview { state }
+}`;
+
+type ThreadComment = {
+	id: string;
+	body: string;
+	createdAt: string;
+	authorAssociation?: string;
+	author?: { login?: string; __typename?: string } | null;
+	replyTo?: { id: string } | null;
+	pullRequestReview?: { state: string } | null;
+};
+type ThreadResponse = {
+	errors?: unknown[];
+	data?: {
+		repository?: {
+			pullRequest?: {
+				reviewThreads: {
+					pageInfo: { hasPreviousPage: boolean };
+					nodes: Array<{
+						id: string;
+						isResolved: boolean;
+						isOutdated: boolean;
+						resolvedBy?: { login: string } | null;
+						root: { nodes: ThreadComment[] };
+						recent: { totalCount: number; nodes: ThreadComment[] };
+					}>;
+				};
+			} | null;
+		} | null;
+	};
+};
+
+export async function listReviewThreads(
+	repo: GitHubRepo,
+	number: number,
+	options: GitHubClientOptions = {}
+): Promise<
+	Result<{ threads: ReviewThread[]; omitted: boolean }, GitHubApiError | MissingGitHubTokenError>
+> {
+	const token = requireToken(options.token);
+	if (token.isErr()) return err(token.error);
+	const result = await githubJson<ThreadResponse>('/graphql', {
+		token: token.value,
+		fetch: options.fetch,
+		method: 'POST',
+		body: JSON.stringify({
+			query: REVIEW_THREADS_QUERY,
+			variables: { owner: repo.owner, name: repo.name, number },
+		}),
+	});
+	if (result.isErr()) return err(result.error);
+	const connection = result.value.data?.repository?.pullRequest?.reviewThreads;
+	if (result.value.errors?.length || !connection)
+		return err(new GitHubApiError(200, 'Unable to load review-thread context.'));
+	return ok({
+		omitted: connection.pageInfo.hasPreviousPage,
+		threads: connection.nodes.map((thread) => {
+			const unique = new Map(
+				[...thread.root.nodes, ...thread.recent.nodes]
+					.filter((c) => c.pullRequestReview?.state !== 'PENDING')
+					.map((c) => [c.id, c])
+			);
+			const comments = [...unique.values()].map((c) => ({
+				id: c.id,
+				author: c.author?.login ?? null,
+				role: parseAuthorRole(c.authorAssociation),
+				body: truncateText(c.body, 500),
+				createdAt: c.createdAt,
+				kind: 'review_comment' as const,
+				isBot:
+					c.author?.__typename === 'Bot' || (c.author?.login?.endsWith('[bot]') ?? false),
+				...(c.replyTo ? { replyToId: c.replyTo.id } : {}),
+				...(c.pullRequestReview ? { reviewState: c.pullRequestReview.state } : {}),
+			}));
+			return {
+				id: thread.id,
+				isResolved: thread.isResolved,
+				isOutdated: thread.isOutdated,
+				resolvedBy: thread.resolvedBy?.login ?? null,
+				comments,
+				commentsOmitted: Math.max(0, thread.recent.totalCount - comments.length),
+			};
+		}),
+	});
+}
+
+/** Bounded, repository-independent evidence; omitted diffs are not evidence of no change. */
+export async function listChangedFiles(
+	repo: GitHubRepo,
+	number: number,
+	options: GitHubClientOptions = {}
+): Promise<
+	Result<{ files: ChangedFile[]; omitted: boolean }, GitHubApiError | MissingGitHubTokenError>
+> {
+	const tokenResult = requireToken(options.token);
+	if (tokenResult.isErr()) return err(tokenResult.error);
+	const raw: Array<{
+		filename: string;
+		status: string;
+		additions: number;
+		deletions: number;
+		patch?: string;
+	}> = [];
+	let omitted = false;
+	for (let page = 1; page <= 10; page++) {
+		const r = await githubJson<typeof raw>(
+			`/repos/${repo.owner}/${repo.name}/pulls/${number}/files?per_page=100&page=${page}`,
+			{ token: tokenResult.value, fetch: options.fetch }
+		);
+		if (r.isErr()) return err(r.error);
+		raw.push(...r.value);
+		if (r.value.length < 100) break;
+		if (page === 10) omitted = true;
+	}
+	// Short paths first keeps root metadata visible without knowing any repository layout.
+	raw.sort(
+		(a, b) => a.filename.length - b.filename.length || a.filename.localeCompare(b.filename)
+	);
+	let pathChars = 0,
+		patchChars = 0;
+	const files: ChangedFile[] = [];
+	for (const f of raw) {
+		if (files.length >= 100 || pathChars + f.filename.length > 8000) {
+			omitted = true;
+			continue;
+		}
+		pathChars += f.filename.length;
+		const patch =
+			f.patch && !f.patch.split('\n').some((line) => line.length > 1000) && patchChars < 4000
+				? f.patch.slice(0, Math.min(500, 4000 - patchChars))
+				: undefined;
+		patchChars += patch?.length ?? 0;
+		files.push({
+			filename: f.filename,
+			status: f.status,
+			additions: f.additions,
+			deletions: f.deletions,
+			...(patch ? { patch } : {}),
+			patchOmitted: !f.patch || patch?.length !== f.patch.length,
+		});
+	}
+	return ok({ files, omitted });
 }
