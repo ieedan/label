@@ -58,6 +58,21 @@ labels:
 only_configured: true # only apply labels that are configured in this file
 ```
 
+### Human-removed labels
+
+The GitHub CLI reads label-event history and does not reapply a label whose latest
+human action was removal, even if Jev gives it a high score or a bot later adds it.
+The veto filters additions and suggested choices without changing the model judgment or removal rules.
+A later human addition lifts that veto. GitHub actors of type `User` count as human,
+including automation using a personal token. App/bot actors do not lift the veto.
+
+History is loaded for dry runs and refreshed immediately before additions after
+inference. A failed history read prevents that item's additions. GitHub does not
+provide an atomic history-check/add operation, so a small concurrent-edit window
+remains. Removal behavior and model prompts are unchanged. Existing stale labels
+are not removed by this fix. Low-level `label()` callers can supply
+`human_removed_labels` in their payload; it does not fetch that history for them.
+
 ### Workflow integration
 
 Check out our examples in the [`examples/github-workflows`](./examples/github-workflows) directory.

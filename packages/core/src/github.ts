@@ -47,6 +47,8 @@ export type LabelItem = {
 	author?: string;
 	authorRole?: AuthorRole | null;
 	currentLabels: string[];
+	/** Labels whose latest human action was removal; used only to veto additions. */
+	humanRemovedLabels?: string[];
 	repository?: string;
 	comments: ItemComment[];
 };
@@ -148,6 +150,7 @@ const gitHubWebhookSchema = z
 		pull_request: gitHubItemSchema.optional(),
 		repository: gitHubRepositorySchema.optional(),
 		conversation: z.array(conversationCommentSchema).optional(),
+		human_removed_labels: z.array(z.string()).optional(),
 	})
 	.passthrough();
 
@@ -317,14 +320,17 @@ export function parseGitHubPayload(
 			: rawItem.pull_request !== undefined
 				? 'pull_request'
 				: 'issue';
-		return ok(
-			toLabelItem(
+		return ok({
+			...toLabelItem(
 				rawItem,
 				type,
 				repositoryName(webhook.data.repository) ?? fallbackRepo,
 				(webhook.data.conversation ?? []).map(toStoredComment)
-			)
-		);
+			),
+			...(webhook.data.human_removed_labels
+				? { humanRemovedLabels: webhook.data.human_removed_labels }
+				: {}),
+		});
 	}
 
 	const item = gitHubItemSchema.safeParse(input);
@@ -613,6 +619,42 @@ function toFetchedComment(raw: GitHubComment, kind: ItemComment['kind']): ItemCo
 		createdAt: raw.created_at ?? null,
 		kind,
 	};
+}
+
+type LabelEvent = {
+	id?: number;
+	event?: string;
+	label?: { name?: string };
+	actor?: { type?: string } | null;
+	created_at?: string;
+};
+
+/** Later human additions lift the veto; bot actions never override a human removal. */
+export function humanRemovedLabels(events: LabelEvent[]): string[] {
+	const removed = new Map<string, string>();
+	const chronological = [...events].sort(
+		(a, b) =>
+			(a.created_at ?? '').localeCompare(b.created_at ?? '') || (a.id ?? 0) - (b.id ?? 0)
+	);
+	for (const event of chronological) {
+		if (event.actor?.type !== 'User' || !event.label?.name) continue;
+		const name = event.label.name;
+		if (event.event === 'unlabeled') removed.set(name.toLowerCase(), name);
+		else if (event.event === 'labeled') removed.delete(name.toLowerCase());
+	}
+	return [...removed.values()];
+}
+
+export async function listHumanRemovedLabels(
+	repo: GitHubRepo,
+	number: number,
+	options: GitHubClientOptions = {}
+): Promise<Result<string[], GitHubApiError | MissingGitHubTokenError>> {
+	const events = await listPaginated<LabelEvent>(
+		`/repos/${repo.owner}/${repo.name}/issues/${number}/events`,
+		options
+	);
+	return events.isErr() ? err(events.error) : ok(humanRemovedLabels(events.value));
 }
 
 function truncateCommentBody(body: string): string {

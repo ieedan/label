@@ -192,6 +192,7 @@ export function collectDecisions(
 	threshold: number
 ): LabelDecision[] {
 	return items.map((item, itemIndex) => {
+		const removedByHuman = new Set(item.humanRemovedLabels?.map((name) => name.toLowerCase()));
 		const judgments = labels.map((label, labelIndex) => {
 			const noulValue = answers[questionId(itemIndex, labelIndex)]?.noul ?? 0;
 			const labelThreshold = label.threshold ?? threshold;
@@ -210,15 +211,28 @@ export function collectDecisions(
 		return {
 			item,
 			labels: judgments,
-			chosen: judgments.filter((judgment) => judgment.apply).map((judgment) => judgment.name),
+			chosen: judgments
+				.filter(
+					(judgment) => judgment.apply && !removedByHuman.has(judgment.name.toLowerCase())
+				)
+				.map((judgment) => judgment.name),
 		};
 	});
 }
 
 export function labelsToApply(decision: LabelDecision): string[] {
 	const existing = new Set(decision.item.currentLabels.map((name) => name.toLowerCase()));
+	const removedByHuman = new Set(
+		decision.item.humanRemovedLabels?.map((name) => name.toLowerCase())
+	);
 	return decision.labels
-		.filter((label) => label.apply && label.canApply && !existing.has(label.name.toLowerCase()))
+		.filter(
+			(label) =>
+				label.apply &&
+				label.canApply &&
+				!existing.has(label.name.toLowerCase()) &&
+				!removedByHuman.has(label.name.toLowerCase())
+		)
 		.map((label) => label.name);
 }
 
