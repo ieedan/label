@@ -1,0 +1,53 @@
+name: 'Label by ieedan'
+description: 'Apply GitHub issue and pull request labels using repository policy and System One decision models.'
+branding:
+  icon: tag
+  color: yellow
+inputs:
+  typesafe-api-key:
+    description: 'API key for the selected System One endpoint.'
+    required: true
+  decision-base-url:
+    description: 'Optional System One base URL. The client appends /v1/systemone.'
+  decision-model:
+    description: 'Optional model ID supported by the selected endpoint.'
+  github-token:
+    description: 'GitHub token with permission to read the item and write labels.'
+    default: ${{ github.token }}
+  number:
+    description: 'Issue or pull request number. Defaults to the event item.'
+    default: ${{ github.event.issue.number || github.event.pull_request.number }}
+  dry-run:
+    description: 'Print label decisions without changing labels.'
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Label issue or pull request
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        TYPESAFE_API_KEY: ${{ inputs.typesafe-api-key }}
+        TYPESAFE_BASE_URL: ${{ inputs.decision-base-url || env.TYPESAFE_BASE_URL }}
+        TYPESAFE_DEFAULT_MODEL: ${{ inputs.decision-model || env.TYPESAFE_DEFAULT_MODEL }}
+        LABEL_NUMBER: ${{ inputs.number }}
+        LABEL_DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        if [[ ! "$LABEL_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::Pass a positive issue or pull request number."
+          exit 1
+        fi
+        if [[ -z "$TYPESAFE_API_KEY" ]]; then
+          echo "::error::Pass an API key for the selected System One endpoint."
+          exit 1
+        fi
+        args=()
+        case "$LABEL_DRY_RUN" in
+          true) args+=(--dry-run) ;;
+          false) ;;
+          *) echo "::error::dry-run must be true or false."; exit 1 ;;
+        esac
+        npx --yes @ieedan/label@0.0.1 label -R "$GITHUB_REPOSITORY" "${args[@]}" "$LABEL_NUMBER"

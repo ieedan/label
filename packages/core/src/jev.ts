@@ -340,12 +340,32 @@ function resolveAsk(options: {
 
 export function createAsk(client: TypeSafeClient): AskSystemOne {
 	return async ({ state, questions }) => {
-		const response = await client.systemOne({ state, questions });
+		const wireQuestions = Object.fromEntries(
+			Object.entries(questions).map(([name, question]) => [
+				name,
+				{
+					...question,
+					instructions:
+						typeof question.instructions === 'object' && question.instructions !== null
+							? Object.values(question.instructions).join('\n')
+							: question.instructions,
+				},
+			])
+		);
+		const response = await client.systemOne({ state, questions: wireQuestions });
 		const answers: Record<string, { noul: number }> = {};
-		for (const [key, answer] of Object.entries(response.answers)) {
-			if (answer && typeof answer === 'object' && 'noul' in answer) {
-				answers[key] = { noul: answer.noul };
+		for (const name of Object.keys(questions)) {
+			const answer = response.answers?.[name];
+			const probability = answer?.noul;
+			if (
+				typeof probability !== 'number' ||
+				!Number.isFinite(probability) ||
+				probability < 0 ||
+				probability > 1
+			) {
+				throw new Error(`Missing valid System One probability for ${name}.`);
 			}
+			answers[name] = { noul: probability };
 		}
 		return { answers };
 	};

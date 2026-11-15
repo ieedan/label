@@ -58,6 +58,74 @@ labels:
 only_configured: true # only apply labels that are configured in this file
 ```
 
+### Use a different decision model
+
+The labeler uses System One's named yes/no questions. Jev is the default.
+To run a model from [OpenRouter's Decisions catalog](https://openrouter.ai/models?fmt=cards&output_modalities=decisions),
+set the System One base URL, API key, and model ID:
+
+```sh
+TYPESAFE_BASE_URL=https://openrouter.ai/api \
+TYPESAFE_API_KEY="$OPENROUTER_API_KEY" \
+TYPESAFE_DEFAULT_MODEL=google/gemini-decision-1 \
+npx @ieedan/label label --top 5 --dry-run
+```
+
+Keep `GITHUB_TOKEN` set as usual. The SDK appends `/v1/systemone` to the base
+URL. To switch between compatible models on OpenRouter, change
+`TYPESAFE_DEFAULT_MODEL` to another model ID, such as
+`openai/gpt-6-luna-decisions`. Use the same settings with any compatible
+System One endpoint that accepts bearer authentication and returns
+probabilities for named `noul` questions.
+See [OpenRouter's System One guide](https://openrouter.ai/docs/guides/community/typesafe-sdk).
+
+Check your policy thresholds with `--dry-run` when you switch models.
+Model-specific context and question limits still apply.
+=### GitHub Action
+
+Add a `TYPESAFE_API_KEY` repository secret and reference an action release tag
+in your workflow.
+
+```yaml
+name: Label
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ieedan/label@v0.1.0
+        with:
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+```
+
+Checkout makes the repository policy file available to the action. For
+`pull_request_target`, use the default checkout of the trusted base branch.
+Set `dry-run: 'true'` to preview the decisions. For events without an issue or
+pull request number, pass the `number` input explicitly.
+
+To use OpenRouter with the action, store your key as an `OPENROUTER_API_KEY`
+repository secret and set these inputs on the action step:
+
+```yaml
+with:
+  typesafe-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+  decision-base-url: https://openrouter.ai/api
+  decision-model: google/gemini-decision-1
+  dry-run: 'true'
+```
+
 ### Workflow integration
 
 Check out our examples in the [`examples/github-workflows`](./examples/github-workflows) directory.
