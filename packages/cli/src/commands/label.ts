@@ -32,7 +32,7 @@ export const schema = defaultCommandOptionsSchema.extend({
 export type LabelOptions = z.infer<typeof schema>;
 
 export const label = new Command('label')
-	.description('Label GitHub issues and pull requests with Jev.')
+	.description('Label GitHub issues and pull requests with a decision model.')
 	.argument('[numbers...]', 'Issue or pull request numbers.')
 	.option(
 		'-R, --repo <owner/name>',
@@ -49,14 +49,17 @@ export const label = new Command('label')
 	.option('--issues', 'Limit to issues (exclude pull requests).', false)
 	.option('--prs', 'Limit to pull requests (exclude issues).', false)
 	.option('--with-confidence', 'Accepted for compatibility; confidence is always shown.', false)
-	.option('--prompt <text>', 'Instructions for Jev. Combined with prompt from the config file.')
+	.option(
+		'--prompt <text>',
+		'Instructions for the decision model. Combined with prompt from the config file.'
+	)
 	.option(
 		'-c, --config <path>',
 		'Path to the label policy file (default: .label.yml or .label.yaml).'
 	)
 	.option(
 		'--threshold <n>',
-		'Minimum noul probability to apply a label.',
+		'Minimum probability to apply a label.',
 		String(core.DEFAULT_LABEL_THRESHOLD)
 	)
 	.addOption(commonOptions.cwd)
@@ -68,7 +71,7 @@ export const label = new Command('label')
 		intro();
 		const { spinner } = initLogging({ options });
 
-		spinner.start('Asking Jev which labels to apply...');
+		spinner.start('Scoring candidate labels...');
 		const result = await tryCommand(runLabel(numbers, options));
 		spinner.stop(result.dryRun ? 'Dry run. No labels were changed.' : 'Updated labels.');
 
