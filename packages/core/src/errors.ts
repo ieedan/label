@@ -127,6 +127,15 @@ export class GitHubApiError extends LabelError {
 	}
 }
 
+export class DecisionProviderError extends LabelError {
+	constructor(provider: string, error: unknown) {
+		super(
+			`Decision provider (${provider}): ${error instanceof Error ? error.message : String(error)}`,
+			{ suggestion: 'Check the decision provider configuration and try again.' }
+		);
+	}
+}
+
 export class TypeSafeRequestError extends LabelError {
 	constructor(error: unknown) {
 		super(

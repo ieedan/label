@@ -58,6 +58,30 @@ labels:
 only_configured: true # only apply labels that are configured in this file
 ```
 
+### Decision providers
+
+Jev remains the default. Use `TYPESAFE_API_KEY` as before. For a System One
+compatible server, the TypeSafe SDK reads `TYPESAFE_BASE_URL` (the SDK appends
+`/v1/systemone`) and `TYPESAFE_DEFAULT_MODEL`.
+
+For another protocol, set `LABEL_DECISION_PROVIDER` in your shell or workflow.
+
+| Value | Default model | API key |
+| --- | --- | --- |
+| `openai` | `gpt-6-luna` | `OPENAI_API_KEY` |
+| `gemini` | `gemini-decision-1` | `GEMINI_API_KEY` |
+
+For either protocol, `LABEL_DECISION_BASE_URL` overrides the versioned API base
+(e.g. `https://api.openai.com/v1`), and the labeler appends `/decisions`.
+Use `LABEL_DECISION_MODEL` and `LABEL_DECISION_API_KEY` to override the model
+and credential. Set those to the values for your gateway when using a custom
+base URL. The endpoint must support the selected protocol.
+
+The labeler uses each model's probability that a label applies. Start with
+`--dry-run` when switching models to check whether your thresholds still fit.
+If OpenAI or Gemini fails to return a valid probability for a question, the labeler
+ends the run before writing labels.
+
 ### Workflow integration
 
 Check out our examples in the [`examples/github-workflows`](./examples/github-workflows) directory.

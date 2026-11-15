@@ -1,6 +1,7 @@
 import { type EntryType, type NoulQuestion, noul, TypeSafeClient } from '@typesafe-ai/sdk';
 import { err, ok, type Result } from 'nevereverthrow';
-import { MissingTypeSafeApiKeyError, TypeSafeRequestError } from './errors';
+import { createDecisionsAsk } from './decisions';
+import { DecisionProviderError, MissingTypeSafeApiKeyError, TypeSafeRequestError } from './errors';
 import type { LabelItem, SimilarItem } from './github';
 import type { LabelDefinition } from './policy';
 
@@ -245,7 +246,12 @@ export async function askLabels(
 		client?: TypeSafeClient;
 		ask?: AskSystemOne;
 	}
-): Promise<Result<LabelDecision[], MissingTypeSafeApiKeyError | TypeSafeRequestError>> {
+): Promise<
+	Result<
+		LabelDecision[],
+		MissingTypeSafeApiKeyError | TypeSafeRequestError | DecisionProviderError
+	>
+> {
 	if (items.length === 0) return ok([]);
 	if (labels.length === 0) {
 		return ok(items.map((item) => ({ item, labels: [], chosen: [] })));
@@ -267,7 +273,9 @@ export async function askLabels(
 		);
 		return ok(nested.flat());
 	} catch (error) {
-		return err(new TypeSafeRequestError(error));
+		return err(
+			error instanceof DecisionProviderError ? error : new TypeSafeRequestError(error)
+		);
 	}
 }
 
@@ -280,7 +288,12 @@ export async function askContextLabels(
 		client?: TypeSafeClient;
 		ask?: AskSystemOne;
 	}
-): Promise<Result<LabelDecision[], MissingTypeSafeApiKeyError | TypeSafeRequestError>> {
+): Promise<
+	Result<
+		LabelDecision[],
+		MissingTypeSafeApiKeyError | TypeSafeRequestError | DecisionProviderError
+	>
+> {
 	if (items.length === 0) return ok([]);
 	if (labels.length === 0) {
 		return ok(items.map(({ item }) => ({ item, labels: [], chosen: [] })));
@@ -307,7 +320,9 @@ export async function askContextLabels(
 		);
 		return ok(nested.flat());
 	} catch (error) {
-		return err(new TypeSafeRequestError(error));
+		return err(
+			error instanceof DecisionProviderError ? error : new TypeSafeRequestError(error)
+		);
 	}
 }
 
@@ -328,9 +343,28 @@ export function mergeDecisions(base: LabelDecision[], extra: LabelDecision[]): L
 function resolveAsk(options: {
 	client?: TypeSafeClient;
 	ask?: AskSystemOne;
-}): Result<AskSystemOne, MissingTypeSafeApiKeyError> {
+}): Result<AskSystemOne, MissingTypeSafeApiKeyError | DecisionProviderError> {
 	if (options.ask) return ok(options.ask);
 	if (options.client) return ok(createAsk(options.client));
+
+	const provider = process.env.LABEL_DECISION_PROVIDER?.trim() || 'system-one';
+	if (provider === 'openai' || provider === 'gemini') {
+		try {
+			const ask = createDecisionsAsk(provider);
+			return ok(async (request) => {
+				try {
+					return await ask(request);
+				} catch (error) {
+					throw new DecisionProviderError(provider, error);
+				}
+			});
+		} catch (error) {
+			return err(new DecisionProviderError(provider, error));
+		}
+	}
+	if (provider !== 'system-one') {
+		return err(new DecisionProviderError(provider, 'Use system-one, openai, or gemini.'));
+	}
 	try {
 		return ok(createAsk(new TypeSafeClient({ timeout: TYPESAFE_TIMEOUT_MS })));
 	} catch {
