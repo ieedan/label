@@ -2,4 +2,4 @@
 "@ieedan/label": patch
 ---
 
-Add opt-in support for the OpenAI and Gemini Decisions APIs, with configurable model and base URL. Jev remains the default.
+Document how to use any compatible System One endpoint, including OpenRouter. Send label instructions as text for compatibility and reject incomplete decision responses before writing labels.

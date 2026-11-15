@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LabelItem, RepoLabel } from '../src/github.js';
 import {
+	askLabels,
 	buildContextRequest,
 	buildRequest,
 	chunkContextItems,
@@ -293,5 +294,61 @@ describe('mergeDecisions', () => {
 		);
 
 		expect(mergeDecisions(local, extra)[0]?.chosen).toEqual(['bug', 'duplicate']);
+	});
+});
+
+describe('System One endpoint configuration', () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.unstubAllGlobals();
+	});
+
+	it.each([
+		'google/gemini-decision-1',
+		'openai/gpt-6-luna-decisions',
+	])('uses %s through the same endpoint', async (model) => {
+		vi.stubEnv('TYPESAFE_BASE_URL', 'https://openrouter.ai/api');
+		vi.stubEnv('TYPESAFE_API_KEY', 'test-openrouter-key');
+		vi.stubEnv('TYPESAFE_DEFAULT_MODEL', model);
+		const name = questionId(0, 0);
+		const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+			Response.json({
+				model,
+				answers: { [name]: { type: 'noul', noul: 0.8 } },
+				usage: { input_tokens: 10, output_tokens: 0 },
+			})
+		);
+		vi.stubGlobal('fetch', fetcher);
+
+		const result = await askLabels([item(1)], labels.slice(0, 1), { threshold: 0.6 });
+		if (result.isErr()) throw result.error;
+		expect(result.value[0]?.chosen).toEqual(['bug']);
+		const [url, options] = fetcher.mock.calls[0] ?? [];
+		expect(String(url)).toBe('https://openrouter.ai/api/v1/systemone');
+		expect(new Headers(options?.headers).get('authorization')).toBe(
+			'Bearer test-openrouter-key'
+		);
+		expect(JSON.parse(String(options?.body))).toMatchObject({
+			model,
+			state: { items: [{ number: 1 }] },
+			questions: {
+				[name]: { type: 'noul', instructions: expect.stringContaining('authorRole') },
+			},
+		});
+	});
+
+	it('fails when the endpoint refuses a label judgment', async () => {
+		vi.stubEnv('TYPESAFE_API_KEY', 'test-key');
+		const name = questionId(0, 0);
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn<typeof fetch>()
+				.mockResolvedValue(Response.json({ answers: { [name]: { type: 'refusal' } } }))
+		);
+		const result = await askLabels([item(1)], labels.slice(0, 1), { threshold: 0.6 });
+		expect(result.isErr()).toBe(true);
+		if (result.isErr())
+			expect(result.error.message).toContain('Missing valid System One probability');
 	});
 });

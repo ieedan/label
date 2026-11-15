@@ -58,29 +58,29 @@ labels:
 only_configured: true # only apply labels that are configured in this file
 ```
 
-### Decision providers
+### Use a different decision model
 
-Jev remains the default. Use `TYPESAFE_API_KEY` as before. For a System One
-compatible server, the TypeSafe SDK reads `TYPESAFE_BASE_URL` (the SDK appends
-`/v1/systemone`) and `TYPESAFE_DEFAULT_MODEL`.
+The labeler uses System One's named yes/no questions. Jev is the default.
+To run a model from [OpenRouter's Decisions catalog](https://openrouter.ai/models?fmt=cards&output_modalities=decisions),
+set the System One base URL, API key, and model ID:
 
-For another protocol, set `LABEL_DECISION_PROVIDER` in your shell or workflow.
+```sh
+TYPESAFE_BASE_URL=https://openrouter.ai/api \
+TYPESAFE_API_KEY="$OPENROUTER_API_KEY" \
+TYPESAFE_DEFAULT_MODEL=google/gemini-decision-1 \
+npx @ieedan/label label --top 5 --dry-run
+```
 
-| Value | Default model | API key |
-| --- | --- | --- |
-| `openai` | `gpt-6-luna` | `OPENAI_API_KEY` |
-| `gemini` | `gemini-decision-1` | `GEMINI_API_KEY` |
+Keep `GITHUB_TOKEN` set as usual. The SDK appends `/v1/systemone` to the base
+URL. To switch between compatible models on OpenRouter, change
+`TYPESAFE_DEFAULT_MODEL` to another model ID, such as
+`openai/gpt-6-luna-decisions`. Use the same settings with any compatible
+System One endpoint that accepts bearer authentication and returns
+probabilities for named `noul` questions.
+See [OpenRouter's System One guide](https://openrouter.ai/docs/guides/community/typesafe-sdk).
 
-For either protocol, `LABEL_DECISION_BASE_URL` overrides the versioned API base
-(e.g. `https://api.openai.com/v1`), and the labeler appends `/decisions`.
-Use `LABEL_DECISION_MODEL` and `LABEL_DECISION_API_KEY` to override the model
-and credential. Set those to the values for your gateway when using a custom
-base URL. The endpoint must support the selected protocol.
-
-The labeler uses each model's probability that a label applies. Start with
-`--dry-run` when switching models to check whether your thresholds still fit.
-If OpenAI or Gemini fails to return a valid probability for a question, the labeler
-ends the run before writing labels.
+Check your policy thresholds with `--dry-run` when you switch models.
+Model-specific context and question limits still apply.
 
 ### Workflow integration
 

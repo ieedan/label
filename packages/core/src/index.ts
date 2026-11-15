@@ -1,6 +1,5 @@
 export {
 	ConflictingIssueSelectionError,
-	DecisionProviderError,
 	GitHubApiError,
 	InvalidIssueNumberError,
 	InvalidLabelPolicyError,

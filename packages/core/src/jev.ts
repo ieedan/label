@@ -1,7 +1,6 @@
 import { type EntryType, type NoulQuestion, noul, TypeSafeClient } from '@typesafe-ai/sdk';
 import { err, ok, type Result } from 'nevereverthrow';
-import { createDecisionsAsk } from './decisions';
-import { DecisionProviderError, MissingTypeSafeApiKeyError, TypeSafeRequestError } from './errors';
+import { MissingTypeSafeApiKeyError, TypeSafeRequestError } from './errors';
 import type { LabelItem, SimilarItem } from './github';
 import type { LabelDefinition } from './policy';
 
@@ -246,12 +245,7 @@ export async function askLabels(
 		client?: TypeSafeClient;
 		ask?: AskSystemOne;
 	}
-): Promise<
-	Result<
-		LabelDecision[],
-		MissingTypeSafeApiKeyError | TypeSafeRequestError | DecisionProviderError
-	>
-> {
+): Promise<Result<LabelDecision[], MissingTypeSafeApiKeyError | TypeSafeRequestError>> {
 	if (items.length === 0) return ok([]);
 	if (labels.length === 0) {
 		return ok(items.map((item) => ({ item, labels: [], chosen: [] })));
@@ -273,9 +267,7 @@ export async function askLabels(
 		);
 		return ok(nested.flat());
 	} catch (error) {
-		return err(
-			error instanceof DecisionProviderError ? error : new TypeSafeRequestError(error)
-		);
+		return err(new TypeSafeRequestError(error));
 	}
 }
 
@@ -288,12 +280,7 @@ export async function askContextLabels(
 		client?: TypeSafeClient;
 		ask?: AskSystemOne;
 	}
-): Promise<
-	Result<
-		LabelDecision[],
-		MissingTypeSafeApiKeyError | TypeSafeRequestError | DecisionProviderError
-	>
-> {
+): Promise<Result<LabelDecision[], MissingTypeSafeApiKeyError | TypeSafeRequestError>> {
 	if (items.length === 0) return ok([]);
 	if (labels.length === 0) {
 		return ok(items.map(({ item }) => ({ item, labels: [], chosen: [] })));
@@ -320,9 +307,7 @@ export async function askContextLabels(
 		);
 		return ok(nested.flat());
 	} catch (error) {
-		return err(
-			error instanceof DecisionProviderError ? error : new TypeSafeRequestError(error)
-		);
+		return err(new TypeSafeRequestError(error));
 	}
 }
 
@@ -343,28 +328,9 @@ export function mergeDecisions(base: LabelDecision[], extra: LabelDecision[]): L
 function resolveAsk(options: {
 	client?: TypeSafeClient;
 	ask?: AskSystemOne;
-}): Result<AskSystemOne, MissingTypeSafeApiKeyError | DecisionProviderError> {
+}): Result<AskSystemOne, MissingTypeSafeApiKeyError> {
 	if (options.ask) return ok(options.ask);
 	if (options.client) return ok(createAsk(options.client));
-
-	const provider = process.env.LABEL_DECISION_PROVIDER?.trim() || 'system-one';
-	if (provider === 'openai' || provider === 'gemini') {
-		try {
-			const ask = createDecisionsAsk(provider);
-			return ok(async (request) => {
-				try {
-					return await ask(request);
-				} catch (error) {
-					throw new DecisionProviderError(provider, error);
-				}
-			});
-		} catch (error) {
-			return err(new DecisionProviderError(provider, error));
-		}
-	}
-	if (provider !== 'system-one') {
-		return err(new DecisionProviderError(provider, 'Use system-one, openai, or gemini.'));
-	}
 	try {
 		return ok(createAsk(new TypeSafeClient({ timeout: TYPESAFE_TIMEOUT_MS })));
 	} catch {
@@ -374,12 +340,32 @@ function resolveAsk(options: {
 
 export function createAsk(client: TypeSafeClient): AskSystemOne {
 	return async ({ state, questions }) => {
-		const response = await client.systemOne({ state, questions });
+		const wireQuestions = Object.fromEntries(
+			Object.entries(questions).map(([name, question]) => [
+				name,
+				{
+					...question,
+					instructions:
+						typeof question.instructions === 'object' && question.instructions !== null
+							? Object.values(question.instructions).join('\n')
+							: question.instructions,
+				},
+			])
+		);
+		const response = await client.systemOne({ state, questions: wireQuestions });
 		const answers: Record<string, { noul: number }> = {};
-		for (const [key, answer] of Object.entries(response.answers)) {
-			if (answer && typeof answer === 'object' && 'noul' in answer) {
-				answers[key] = { noul: answer.noul };
+		for (const name of Object.keys(questions)) {
+			const answer = response.answers?.[name];
+			const probability = answer?.noul;
+			if (
+				typeof probability !== 'number' ||
+				!Number.isFinite(probability) ||
+				probability < 0 ||
+				probability > 1
+			) {
+				throw new Error(`Missing valid System One probability for ${name}.`);
 			}
+			answers[name] = { noul: probability };
 		}
 		return { answers };
 	};
