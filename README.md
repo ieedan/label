@@ -81,6 +81,50 @@ See [OpenRouter's System One guide](https://openrouter.ai/docs/guides/community/
 
 Check your policy thresholds with `--dry-run` when you switch models.
 Model-specific context and question limits still apply.
+=### GitHub Action
+
+Add a `TYPESAFE_API_KEY` repository secret and reference an action release tag
+in your workflow.
+
+```yaml
+name: Label
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ieedan/label@v0.1.0
+        with:
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+```
+
+Checkout makes the repository policy file available to the action. For
+`pull_request_target`, use the default checkout of the trusted base branch.
+Set `dry-run: 'true'` to preview the decisions. For events without an issue or
+pull request number, pass the `number` input explicitly.
+
+To use OpenRouter with the action, store your key as an `OPENROUTER_API_KEY`
+repository secret and set these inputs on the action step:
+
+```yaml
+with:
+  typesafe-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+  decision-base-url: https://openrouter.ai/api
+  decision-model: google/gemini-decision-1
+  dry-run: 'true'
+```
 
 ### Workflow integration
 
